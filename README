@@ -1,0 +1,104 @@
+Shader-Based Renewable Energy Farm Visualization
+Name: Gunabhiram Aruru
+Course: CSCI 4229/5229 Computer Graphics
+
+Current Project Description
+---------------------------
+This program develops the working prior renewable-energy farm scene into the
+final-project codebase. It preserves the handmade textured scene, moving
+positional light, animation, navigation, and object inspection while adding
+renewable-energy structures and restrained secondary scenery.
+
+The current scene contains:
+- three handmade animated wind turbines
+- a handmade barn/shed
+- a handmade framed greenhouse with separately drawn glazing
+- a handmade four-panel solar array with support posts
+- four low-poly handmade trees
+- a fence and path
+- a textured ground plane
+- a visible moving positional light
+
+The greenhouse glass is currently an opaque colored placeholder drawn in a
+separate function. Real transparency, shaders, wind-flow visualization, and
+fog will be implemented in later phases.
+
+Build Instructions
+------------------
+Run these commands from this directory.
+
+On Linux or macOS:
+    make clean
+    make
+
+The Makefile compiles with:
+    g++ -std=c++11 -Wall -Wextra
+
+Run Instructions
+----------------
+    ./final
+
+Controls
+--------
+0                 Inspect the full scene
+1                 Inspect turbines only
+2                 Inspect barn/farmhouse only
+3                 Inspect greenhouse only
+4                 Inspect solar-panel array only
+5                 Inspect fence and secondary objects
+Arrow keys        Rotate overview camera or navigate in first-person mode
+PageUp/PageDown   Adjust zoom or field of view
++ or =            Zoom in / decrease field of view
+- or _            Zoom out / increase field of view
+m                 Cycle orthographic, perspective, and first-person modes
+R                 Reset to the default full-scene perspective camera
+r                 Pause/resume turbine blade rotation
+a                 Toggle axes
+l                 Toggle lighting
+t                 Toggle textures
+Space             Pause/resume automatic light movement
+, and .           Move the light angle manually
+[ and ]           Lower/raise the light
+q or ESC          Exit
+
+Default State
+-------------
+The program starts in a perspective overview with lighting, textures, depth
+testing, moving light, and turbine animation enabled.
+
+Code Reuse and Phase 1 Changes
+------------------------------
+The handmade turbine, barn, fence, path, ground, BMP loader, lighting,
+texture mapping, navigation, and animation are reused from the author's
+prior course project.
+
+Phase 1 changes include:
+- final-project source, executable, title, and documentation naming
+- perspective overview as the initial camera
+- object inspection modes 0 through 5
+- centered camera presets for each inspection group
+- scene drawing refactored into named object-group functions
+- updated HUD showing project, camera, inspection, lighting, and texture state
+
+Current object additions include:
+- greenhouse frame, roof structure, and separate opaque glass placeholder
+- angled photovoltaic panels with handmade supports and specular material
+- low-poly trees with handmade trunks and cone canopies
+
+No GLSL shader, GLEW dependency, fog, blending, or real transparency is
+included yet.
+
+Textures
+--------
+Only textures currently used by the program are included:
+- textures/grass.bmp
+- textures/metal.bmp
+- textures/path.bmp
+- textures/roof.bmp
+- textures/wood.bmp
+
+Known Limitations
+-----------------
+- Greenhouse glazing is opaque until the later transparency phase.
+- Texture and shader-ready asset paths are relative, so run ./final from the
+  project directory.
