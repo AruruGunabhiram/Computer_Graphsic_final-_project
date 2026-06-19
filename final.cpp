@@ -704,8 +704,6 @@ void drawFence()
    {
       {29, -11, 10,  0}, {29, -3, 10, 0},
       {24,  -7,  8, 90}, {34, -7, 8, 90},
-      {28,   9, 12,  0}, {28, 17, 12, 0},
-      {22,  13,  8, 90}, {34, 13, 8, 90},
       {-5, 21, 12,  0}, {-5, 29, 12, 0},
       {-11, 25, 8, 90}, { 1, 25, 8, 90},
       {-25, 17, 16, 0}, {-25, 31, 16, 0},
@@ -745,37 +743,162 @@ void drawZoneSign(double x, double z, float r, float g, float b)
    drawBox(x, 1.25, z + 0.076, 1.12, 0.08, 0.025);
 }
 
-// Reserve and identify the substation zone with a concrete equipment pad,
-// transformer cabinets, and a short line of handmade power poles.
-void drawSubstationArea()
+// Draw one reusable origin-centered distribution pole from a wooden post,
+// metal crossarm, and three ceramic insulators.
+void drawPowerPole()
 {
-   glColor3f(0.38f, 0.39f, 0.40f);
-   drawBox(substationZoneX, 0.08, substationZoneZ, 9.0, 0.16, 6.0);
+   const float poleSpecular[] = {0.18f, 0.16f, 0.12f, 1.0f};
+   const float metalSpecular[] = {0.42f, 0.44f, 0.46f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
-   glColor3f(0.26f, 0.31f, 0.34f);
-   drawBox(substationZoneX - 2.0, 0.75, substationZoneZ, 1.8, 1.35, 1.4);
-   drawBox(substationZoneX + 0.4, 0.75, substationZoneZ, 1.8, 1.35, 1.4);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, poleSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 12.0f);
+   glColor3f(0.34f, 0.23f, 0.12f);
+   drawBox(0, 2.35, 0, 0.24, 4.70, 0.24);
 
-   for (int pole = 0; pole < 3; ++pole)
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+   glColor3f(0.42f, 0.44f, 0.45f);
+   drawBox(0, 4.30, 0, 2.15, 0.16, 0.18);
+
+   // White ceramic blocks distinguish the insulated cable attachment points.
+   glColor3f(0.90f, 0.91f, 0.88f);
+   for (int insulator = -1; insulator <= 1; ++insulator)
    {
-      const double x = 17.0 + 5.0 * pole;
-      glColor3f(0.33f, 0.22f, 0.12f);
-      drawBox(x, 2.5, substationZoneZ + 5.0, 0.24, 5.0, 0.24);
-      drawBox(x, 4.55, substationZoneZ + 5.0, 2.3, 0.18, 0.18);
+      drawBox(0.72 * insulator, 4.48, 0, 0.16, 0.28, 0.16);
+      drawBox(0.72 * insulator, 4.65, 0, 0.24, 0.07, 0.24);
+   }
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+}
+
+// Draw one complete origin-centered electrical substation. The model contains
+// a fenced concrete pad, transformer boxes, bus-support posts and beams,
+// ceramic insulators, and a compact set of dark internal cables.
+void drawSubstation()
+{
+   const float metalSpecular[] = {0.38f, 0.42f, 0.44f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+
+   glColor3f(0.38f, 0.39f, 0.40f);
+   drawBox(0, 0.08, 0, 9.0, 0.16, 6.0);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 34.0f);
+   glColor3f(0.26f, 0.31f, 0.34f);
+   drawBox(-2.0, 0.75, 0.55, 1.8, 1.35, 1.4);
+   drawBox( 0.4, 0.75, 0.55, 1.8, 1.35, 1.4);
+
+   // Transformer cooling fins are raised slightly from the cabinets.
+   glColor3f(0.15f, 0.18f, 0.19f);
+   for (int transformer = 0; transformer < 2; ++transformer)
+   {
+      const double centerX = transformer ? 0.4 : -2.0;
+      for (int fin = -2; fin <= 2; ++fin)
+         drawBox(centerX + 0.25 * fin, 0.78, 1.27,
+                 0.08, 0.92, 0.08);
+   }
+
+   // Two steel gantries carry a simple three-phase bus above the equipment.
+   glColor3f(0.56f, 0.58f, 0.60f);
+   for (int gantry = 0; gantry < 2; ++gantry)
+   {
+      const double z = -1.45 + 2.0 * gantry;
+      drawBox(-3.35, 1.85, z, 0.16, 3.55, 0.16);
+      drawBox( 3.35, 1.85, z, 0.16, 3.55, 0.16);
+      drawBox(0, 3.52, z, 6.85, 0.16, 0.16);
+
+      glColor3f(0.90f, 0.91f, 0.88f);
+      for (int insulator = -1; insulator <= 1; ++insulator)
+         drawBox(1.05 * insulator, 3.72, z,
+                 0.18, 0.34, 0.18);
+      glColor3f(0.56f, 0.58f, 0.60f);
+   }
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+
+   // The boundary belongs to the reusable substation rather than global fence
+   // code, so inspection mode shows the same complete object as the farm.
+   drawFenceSection(0, -3.1, 9.2, 0);
+   drawFenceSection(0,  3.1, 9.2, 0);
+   drawFenceSection(-4.6, 0, 6.2, 90);
+   drawFenceSection( 4.6, 0, 6.2, 90);
+
+   glDisable(GL_LIGHTING);
+   glColor3f(0.06f, 0.07f, 0.08f);
+   glLineWidth(2.0f);
+   glBegin(GL_LINES);
+   for (int phase = -1; phase <= 1; ++phase)
+   {
+      const double x = 1.05 * phase;
+      glVertex3d(x, 3.90, -1.45);
+      glVertex3d(x, 3.90, 0.55);
+      glVertex3d(x, 3.90, 0.55);
+      glVertex3d(0.4 + 0.25 * phase, 1.50, 0.90);
+   }
+   glEnd();
+   glLineWidth(1.0f);
+   if (lighting)
+      glEnable(GL_LIGHTING);
+}
+
+// Draw the visual-only farm power network. A restrained branched layout links
+// the wind, solar, battery, barn/control, and substation zones with repeated
+// poles and three gently sagging cable phases per span.
+void drawPowerLines()
+{
+   const double poles[][2] =
+   {
+      {-12.0, -10.0}, {-4.0, -5.0},   // Wind branch.
+      { 10.0, -10.0}, { 3.0, -5.0},   // Solar branch.
+      { 20.0,  -2.0}, {25.0,  6.0},   // Battery branch.
+      { 17.0,  20.0}, {24.0, 17.5},   // Barn/control branch.
+      { -0.5,  -4.0}, {12.0,  3.0},   // Central trunk.
+      { 24.0,  10.0}                   // Substation entry.
+   };
+   const int spans[][2] =
+   {
+      {0, 1}, {1, 8}, {2, 3}, {3, 8},
+      {8, 9}, {4, 5}, {5, 9}, {9, 10},
+      {6, 7}, {7, 10}
+   };
+
+   const int poleCount = sizeof(poles) / sizeof(poles[0]);
+   for (int pole = 0; pole < poleCount; ++pole)
+   {
+      glPushMatrix();
+      glTranslated(poles[pole][0], 0, poles[pole][1]);
+      drawPowerPole();
+      glPopMatrix();
    }
 
    glDisable(GL_LIGHTING);
-   glColor3f(0.10f, 0.10f, 0.10f);
-   glBegin(GL_LINES);
-   for (int wire = -1; wire <= 1; ++wire)
+   glColor3f(0.055f, 0.06f, 0.065f);
+   glLineWidth(1.6f);
+   const int spanCount = sizeof(spans) / sizeof(spans[0]);
+   for (int span = 0; span < spanCount; ++span)
    {
-      const double offset = 0.8 * wire;
-      glVertex3d(17.0 + offset, 4.55, substationZoneZ + 5.0);
-      glVertex3d(22.0 + offset, 4.55, substationZoneZ + 5.0);
-      glVertex3d(22.0 + offset, 4.55, substationZoneZ + 5.0);
-      glVertex3d(27.0 + offset, 4.55, substationZoneZ + 5.0);
+      const int start = spans[span][0];
+      const int end = spans[span][1];
+      for (int phase = -1; phase <= 1; ++phase)
+      {
+         glBegin(GL_LINE_STRIP);
+         for (int segment = 0; segment <= 8; ++segment)
+         {
+            const double t = segment / 8.0;
+            const double x = poles[start][0] +
+               (poles[end][0] - poles[start][0]) * t + 0.72 * phase;
+            const double z = poles[start][1] +
+               (poles[end][1] - poles[start][1]) * t;
+            const double sag = 0.34 * std::sin(180.0 * t * 3.1415927 / 180.0);
+            glVertex3d(x, 4.65 - sag, z);
+         }
+         glEnd();
+      }
    }
-   glEnd();
+   glLineWidth(1.0f);
    if (lighting)
       glEnable(GL_LIGHTING);
 }
@@ -1682,7 +1805,6 @@ void drawSecondaryObjects()
    drawPathNetwork();
    drawFence();
    drawTreeGroup();
-   drawSubstationArea();
    drawFarmDetails();
 }
 
@@ -1698,6 +1820,11 @@ void drawScene()
    drawGreenhouseOpaque();
    drawSolarFarm();
    drawBatteryYard();
+   glPushMatrix();
+   glTranslated(substationZoneX, 0, substationZoneZ);
+   drawSubstation();
+   glPopMatrix();
+   drawPowerLines();
 }
 
 // Draw a neutral inspection floor and one-unit grid at y=0. It is intentionally
@@ -1723,20 +1850,6 @@ void drawInspectionGround()
       glEnable(GL_LIGHTING);
 }
 
-// Draw a compact origin-centered substation sample for inspection mode.
-void drawInspectionSubstation()
-{
-   glColor3f(0.38f, 0.39f, 0.40f);
-   drawBox(0, 0.08, 0, 5.8, 0.16, 4.2);
-   glColor3f(0.26f, 0.31f, 0.34f);
-   drawBox(-1.25, 0.80, 0, 1.65, 1.45, 1.35);
-   drawBox( 1.25, 0.80, 0, 1.65, 1.45, 1.35);
-   glColor3f(0.62f, 0.64f, 0.64f);
-   drawBox(-2.2, 1.9, -1.2, 0.16, 3.8, 0.16);
-   drawBox( 2.2, 1.9, -1.2, 0.16, 3.8, 0.16);
-   drawBox(0, 3.45, -1.2, 4.7, 0.16, 0.16);
-}
-
 // Draw exactly one major object at the origin for professor-facing inspection.
 // Existing geometry is reused with inverse translations where legacy drawing
 // functions still contain their original local placement transform.
@@ -1759,7 +1872,7 @@ void drawInspectionObject()
          drawBatteryUnit();
          break;
       case 4:
-         drawInspectionSubstation();
+         drawSubstation();
          break;
       case 5:
          glPushMatrix();
