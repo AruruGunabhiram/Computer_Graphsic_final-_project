@@ -1010,63 +1010,86 @@ void drawGreenhouseGlassPanels()
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Draw a dark photovoltaic panel as a shallow handmade box.
-// The top normal is transformed with the panel angle by OpenGL's normal matrix.
-void drawSolarPanelUnit()
+// Draw one complete origin-centered solar-panel assembly. All components use
+// the handmade quad-based box primitive: concrete base, steel stand and braces,
+// tilted photovoltaic face, raised frame, and raised cell-divider strips.
+void drawSolarPanel()
 {
    const float panelSpecular[] = {0.58f, 0.68f, 0.82f, 1.0f};
+   const float frameSpecular[] = {0.40f, 0.42f, 0.46f, 1.0f};
    const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glDisable(GL_TEXTURE_2D);
+
+   // A broad concrete foot keeps the stand visibly anchored to the terrain.
+   glColor3f(0.32f, 0.34f, 0.35f);
+   drawBox(0, 0.07, 0, 1.35, 0.14, 0.72);
+
+   // Steel support and diagonal braces use a moderate metallic highlight.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, frameSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+   glColor3f(0.42f, 0.44f, 0.47f);
+   drawBox(-0.68, 0.54, 0, 0.10, 0.94, 0.10);
+   drawBox( 0.68, 0.54, 0, 0.10, 0.94, 0.10);
+
+   glPushMatrix();
+   glTranslated(-0.68, 0.55, 0.25);
+   glRotated(-24, 1, 0, 0);
+   drawBox(0, 0, 0, 0.09, 0.09, 0.78);
+   glPopMatrix();
+
+   glPushMatrix();
+   glTranslated(0.68, 0.55, 0.25);
+   glRotated(-24, 1, 0, 0);
+   drawBox(0, 0, 0, 0.09, 0.09, 0.78);
+   glPopMatrix();
+
+   glPushMatrix();
+   glTranslated(0, 1.08, 0);
+   glRotated(-24, 1, 0, 0);
+
+   // The dark blue face has high shininess so the moving positional light
+   // creates a readable reflective highlight across the solar field.
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, panelSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 72.0f);
-
    glColor3f(0.04f, 0.12f, 0.24f);
-   drawBox(0, 0, 0, 2.15, 0.08, 1.25);
+   drawBox(0, 0, 0, 2.18, 0.055, 1.18);
 
-   glDisable(GL_LIGHTING);
-   glColor3f(0.30f, 0.55f, 0.78f);
-   glBegin(GL_LINES);
-   glNormal3f(0, 1, 0);
+   // Frame and divider strips sit above the panel face, avoiding coplanar
+   // surfaces and the depth-buffer flicker caused by z-fighting.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, frameSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 44.0f);
+   glColor3f(0.54f, 0.58f, 0.62f);
+   drawBox(0, 0.055, -0.65, 2.40, 0.10, 0.10);
+   drawBox(0, 0.055,  0.65, 2.40, 0.10, 0.10);
+   drawBox(-1.15, 0.055, 0, 0.10, 0.10, 1.20);
+   drawBox( 1.15, 0.055, 0, 0.10, 0.10, 1.20);
+
+   glColor3f(0.20f, 0.38f, 0.58f);
    for (int i = -1; i <= 1; ++i)
-   {
-      glVertex3d(0.52 * i, 0.045, -0.60);
-      glVertex3d(0.52 * i, 0.045,  0.60);
-   }
-   glVertex3d(-1.05, 0.045, 0);
-   glVertex3d( 1.05, 0.045, 0);
-   glEnd();
-   if (lighting)
-      glEnable(GL_LIGHTING);
+      drawBox(0.52 * i, 0.061, 0, 0.025, 0.018, 1.16);
+   drawBox(0, 0.061, 0, 2.16, 0.018, 0.025);
+
+   glPopMatrix();
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Draw a compact array of angled panels with handmade support posts and braces.
-void drawSolarPanelArray()
+// Draw rows of repeated solar panels using transforms around one shared model.
+void drawSolarFarm()
 {
-   const double panelX[] = {-1.25, 1.25};
-   const double panelZ[] = {-0.8, 0.8};
-
    glPushMatrix();
-   glTranslated(3.3, 0, -0.2);
+   glTranslated(solarZoneX, 0, solarZoneZ);
    glRotated(-12, 0, 1, 0);
 
-   glColor3f(0.42f, 0.44f, 0.46f);
-   for (int row = 0; row < 2; ++row)
+   for (int row = 0; row < 3; ++row)
    {
-      for (int column = 0; column < 2; ++column)
+      for (int column = 0; column < 3; ++column)
       {
-         const double x = panelX[column];
-         const double z = panelZ[row];
-         drawBox(x - 0.72, 0.48, z, 0.10, 0.96, 0.10);
-         drawBox(x + 0.72, 0.48, z, 0.10, 0.96, 0.10);
-
          glPushMatrix();
-         glTranslated(x, 1.02, z);
-         glRotated(-24, 1, 0, 0);
-         drawSolarPanelUnit();
+         glTranslated((column - 1) * 3.0, 0, (row - 1) * 2.35);
+         drawSolarPanel();
          glPopMatrix();
       }
    }
@@ -1590,15 +1613,6 @@ void drawWindRibbons()
 // Scene dispatch
 // -----------------------------------------------------------------------------
 
-// Draw the complete handmade solar-energy object group.
-void drawSolarGroup()
-{
-   glPushMatrix();
-   glTranslated(solarZoneX - 3.3, 0, solarZoneZ + 0.2);
-   drawSolarPanelArray();
-   glPopMatrix();
-}
-
 // Draw environmental and secondary objects used around the energy farm.
 void drawSecondaryObjects()
 {
@@ -1620,7 +1634,7 @@ void drawScene()
    drawBarnGroup();
    drawTurbineField();
    drawGreenhouseOpaque();
-   drawSolarGroup();
+   drawSolarFarm();
    glPushMatrix();
    glTranslated(batteryZoneX - 7.2, 0, batteryZoneZ + 1.4);
    drawBatteryStorage();
@@ -1680,14 +1694,7 @@ void drawInspectionObject()
          glPopMatrix();
          break;
       case 2:
-         glColor3f(0.42f, 0.44f, 0.46f);
-         drawBox(-0.72, 0.48, 0, 0.10, 0.96, 0.10);
-         drawBox( 0.72, 0.48, 0, 0.10, 0.96, 0.10);
-         glPushMatrix();
-         glTranslated(0, 1.02, 0);
-         glRotated(-24, 1, 0, 0);
-         drawSolarPanelUnit();
-         glPopMatrix();
+         drawSolarPanel();
          break;
       case 3:
          drawBatteryUnit();

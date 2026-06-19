@@ -34,12 +34,15 @@ Controls
 --------
 
     0                 Full-scene inspection view
-    1                 Inspect turbines
-    2                 Inspect barn/farmhouse
-    3                 Inspect greenhouse
-    4                 Inspect solar-panel array
-    5                 Inspect fence and secondary objects
-    6                 Inspect battery-storage cabinets
+    1                 Inspect wind turbine
+    2                 Inspect solar panel
+    3                 Inspect battery-storage cabinet
+    4                 Inspect substation
+    5                 Inspect greenhouse
+    6                 Inspect barn/control building
+    7                 Inspect weather station
+    8                 Inspect sheep
+    9                 Inspect farmer
     Arrow keys        Rotate overview camera; turn/move in first person
     PageUp/PageDown   Zoom in/out or decrease/increase field of view
     + or =            Zoom in / decrease field of view
@@ -64,6 +67,7 @@ Feature List
 - Handmade reusable geometry for turbines, buildings, greenhouse framing,
   solar panels, battery cabinets, trees, fences, expanded terrain, and paths
 - Three instanced turbines with frame-rate-independent rotor animation
+- Nine instanced solar panels with raised frames, supports, and reflective faces
 - Shared interactive wind speed from 0.0 to 5.0
 - Twelve translucent wind-flow ribbons animated by GLSL
 - Fixed-pipeline ribbon fallback if GLSL loading or compilation fails
