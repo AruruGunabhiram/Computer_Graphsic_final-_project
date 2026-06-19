@@ -61,6 +61,7 @@ const double minWindSpeed = 0.0;
 const double maxWindSpeed = 5.0;
 const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
+const double anemometerDegreesPerSecond = 120.0;
 const double terrainHalfSize = 45.0;
 const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
 const float fogStart = 52.0f;
@@ -103,6 +104,7 @@ int fov = 60;
 double asp = 1;
 double dim = 42;
 double bladeAngle = 0;
+double anemometerAngle = 0;
 double fpX = 0;
 double fpY = 1;
 double fpZ = 42;
@@ -1488,27 +1490,89 @@ void drawBatteryYard()
            4.60, 0.14, 0.18);
 }
 
-// Draw an origin-centered weather station from a mast, instrument enclosure,
-// wind vane, anemometer arms, and three handmade cup blocks.
+// Draw an origin-centered weather station. Its anemometer uses the shared
+// elapsed-time angle advanced from windSpeed in idle(), so the visible sensor
+// responds immediately to the same wind value used by turbines and the HUD.
 void drawWeatherStation()
 {
+   const float metalSpecular[] = {0.42f, 0.45f, 0.48f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0f);
+
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureMetal);
+   }
    glColor3f(0.48f, 0.52f, 0.54f);
    drawBox(0, 1.7, 0, 0.16, 3.4, 0.16);
-   drawBox(0, 0.65, 0, 0.85, 0.58, 0.52);
-   drawBox(0, 3.15, 0, 2.0, 0.10, 0.10);
-   drawBox(0, 3.38, 0, 0.10, 0.48, 0.10);
+   drawBox(0, 0.08, 0, 0.72, 0.16, 0.72);
+   glDisable(GL_TEXTURE_2D);
 
+   // Weatherproof sensor enclosure and small status lamp.
+   glColor3f(0.78f, 0.80f, 0.76f);
+   drawBox(0, 1.05, 0, 0.86, 0.62, 0.56);
+   glColor3f(0.10f, 0.16f, 0.18f);
+   drawBox(0, 1.05, -0.291, 0.58, 0.30, 0.025);
+   glColor3f(0.18f, 0.82f, 0.30f);
+   drawBox(0.27, 1.22, -0.31, 0.07, 0.07, 0.04);
+
+   // Tiny solar panel powers the remote instrument box.
+   glPushMatrix();
+   glTranslated(-0.62, 2.15, 0);
+   glRotated(-28, 0, 0, 1);
+   glColor3f(0.08f, 0.20f, 0.38f);
+   drawBox(0, 0, 0, 0.82, 0.06, 0.58);
+   glColor3f(0.58f, 0.62f, 0.64f);
+   drawBox(0, -0.08, 0, 0.92, 0.08, 0.68);
+   glPopMatrix();
+
+   // Wind vane rotates as a single horizontal assembly around the mast.
+   glPushMatrix();
+   glTranslated(0, 3.08, 0);
+   glRotated(-32, 0, 1, 0);
+   glColor3f(0.70f, 0.74f, 0.76f);
+   drawBox(0, 0, 0, 2.0, 0.09, 0.09);
    glColor3f(0.82f, 0.30f, 0.14f);
-   drawBox(0.72, 3.15, 0, 0.45, 0.26, 0.08);
+   drawBox(0.72, 0.12, 0, 0.48, 0.32, 0.08);
+   glBegin(GL_TRIANGLES);
+   glNormal3f(0, 0, -1);
+   glVertex3d(-1.22, 0, -0.05);
+   glVertex3d(-0.88, 0.20, -0.05);
+   glVertex3d(-0.88, -0.20, -0.05);
+   glNormal3f(0, 0, 1);
+   glVertex3d(-1.22, 0, 0.05);
+   glVertex3d(-0.88, -0.20, 0.05);
+   glVertex3d(-0.88, 0.20, 0.05);
+   glEnd();
+   glPopMatrix();
+
+   // Rotate all three cup arms together. No physics model is needed: angular
+   // speed is a linear multiple of windSpeed and is integrated in idle().
+   glPushMatrix();
+   glTranslated(0, 3.62, 0);
+   glRotated(anemometerAngle, 0, 1, 0);
    glColor3f(0.72f, 0.76f, 0.78f);
    for (int cup = 0; cup < 3; ++cup)
    {
       glPushMatrix();
       glRotated(120 * cup, 0, 1, 0);
-      drawBox(0.62, 3.62, 0, 1.15, 0.08, 0.08);
-      drawBox(1.15, 3.62, 0.12, 0.22, 0.28, 0.24);
+      drawBox(0.58, 0, 0, 1.12, 0.07, 0.07);
+      glColor3f(0.30f, 0.34f, 0.36f);
+      drawBox(1.13, 0, 0.14, 0.24, 0.30, 0.28);
+      glColor3f(0.72f, 0.76f, 0.78f);
       glPopMatrix();
    }
+   drawBox(0, 0, 0, 0.20, 0.20, 0.20);
+   glPopMatrix();
+
+   drawBox(0, 3.38, 0, 0.10, 0.48, 0.10);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Draw one origin-centered low-poly sheep using only transformed handmade
@@ -1553,7 +1617,8 @@ void drawFarmer()
 void drawFarmCharactersAndInstruments()
 {
    glPushMatrix();
-   glTranslated(-10.0, 0, -8.0);
+   // Sited beside the turbine access road for representative wind readings.
+   glTranslated(-15.0, 0, -9.0);
    drawWeatherStation();
    glPopMatrix();
 
@@ -2220,10 +2285,13 @@ void display()
 
    const double bladeRpm =
       rotateBlades ? baseBladeDegreesPerSecond * windSpeed / 6.0 : 0.0;
-   char windText[100];
+   const double anemometerRpm =
+      anemometerDegreesPerSecond * windSpeed / 6.0;
+   char windText[140];
    std::snprintf(windText, sizeof(windText),
-                 "Wind Speed: %.2f   Turbine RPM: %.2f   Blades: %s",
-                 windSpeed, bladeRpm, rotateBlades ? "running" : "paused");
+                 "Wind Speed: %.2f   Turbine RPM: %.2f   Anemometer RPM: %.2f   Blades: %s",
+                 windSpeed, bladeRpm, anemometerRpm,
+                 rotateBlades ? "running" : "paused");
 
    DrawText(10, 170, "Shader-Based Renewable Energy Farm Visualization");
    DrawText(10, 150, stateText);
@@ -2498,6 +2566,14 @@ void idle()
          baseBladeDegreesPerSecond * windSpeed * elapsedSeconds;
       bladeAngle = std::fmod(bladeAngle + bladeDegrees, 360.0);
    }
+   // The weather station is an independent sensor: it follows windSpeed even
+   // when turbine blade animation is paused with the 'r' control.
+   const double elapsedSeconds = elapsed / 1000.0;
+   const double anemometerDegrees =
+      anemometerDegreesPerSecond * windSpeed * elapsedSeconds;
+   anemometerAngle =
+      std::fmod(anemometerAngle + anemometerDegrees, 360.0);
+
    if (moveLight)
       lightAngle = std::fmod(lightAngle + 0.025 * elapsed, 360.0);
 
