@@ -3,8 +3,8 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 2 preserves the textured renewable-energy scene and adds greenhouse
- * transparency after the opaque scene pass.
+ * Phase 3 preserves the textured renewable-energy scene and adds an
+ * interactive wind-speed model for turbine blade animation.
  */
 
 #ifdef __APPLE__
@@ -52,6 +52,7 @@ int lighting = 1;      // Toggle lighting on/off
 int textures = 1;      // Toggle textures on/off
 int glassVisible = 1;  // Toggle transparent greenhouse glazing
 int moveLight = 1;     // Pause/resume moving light
+double windSpeed = 1.0;
 double lightAngle = 90;
 double lightHeight = 5;
 int th = 35;           // Overhead azimuth
@@ -74,6 +75,11 @@ unsigned int textureWood = 0;
 unsigned int textureRoof = 0;
 unsigned int texturePath = 0;
 unsigned int textureMetal = 0;
+
+const double minWindSpeed = 0.0;
+const double maxWindSpeed = 5.0;
+const double windSpeedStep = 0.25;
+const double baseBladeDegreesPerSecond = 45.0;
 
 // Reverse byte order when reading a BMP created on opposite-endian hardware.
 void Reverse(void* value, int bytes)
@@ -1149,15 +1155,23 @@ void display()
                  InspectionName(), lighting ? "on" : "off",
                  textures ? "on" : "off", glassVisible ? "on" : "off");
 
-   DrawText(10, 150, "Shader-Based Renewable Energy Farm Visualization");
-   DrawText(10, 130, stateText);
+   const double bladeRpm =
+      rotateBlades ? baseBladeDegreesPerSecond * windSpeed / 6.0 : 0.0;
+   char windText[100];
+   std::snprintf(windText, sizeof(windText),
+                 "Wind Speed: %.2f   Turbine RPM: %.2f   Blades: %s",
+                 windSpeed, bladeRpm, rotateBlades ? "running" : "paused");
+
+   DrawText(10, 170, "Shader-Based Renewable Energy Farm Visualization");
+   DrawText(10, 150, stateText);
+   DrawText(10, 130, windText);
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect objects  arrows: navigate  l: lighting  t: textures  g: glass");
-   DrawText(10, 30, "r: rotate blades  R: reset camera  SPACE: pause light  ,/.: light angle");
+   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  [ / ]: wind");
+   DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
-            "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  [ / ]: light height  q/ESC: exit");
+            "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
 
    glPopMatrix();
    glMatrixMode(GL_PROJECTION);
@@ -1320,11 +1334,23 @@ void key(unsigned char ch, int, int)
    }
    else if (ch == '[')
    {
+      windSpeed -= windSpeedStep;
+      if (windSpeed < minWindSpeed)
+         windSpeed = minWindSpeed;
+   }
+   else if (ch == ']')
+   {
+      windSpeed += windSpeedStep;
+      if (windSpeed > maxWindSpeed)
+         windSpeed = maxWindSpeed;
+   }
+   else if (ch == '<')
+   {
       lightHeight -= 0.25;
       if (lightHeight < 0.5)
          lightHeight = 0.5;
    }
-   else if (ch == ']')
+   else if (ch == '>')
    {
       lightHeight += 0.25;
       if (lightHeight > 12)
@@ -1412,9 +1438,15 @@ void idle()
    const int elapsed = currentTime - previousTime;
    previousTime = currentTime;
 
-   // Use elapsed time so blade speed does not depend on frame rate.
+   // The wind model scales the original 45-degree/second blade speed linearly.
+   // Elapsed wall-clock time keeps motion smooth and independent of frame rate.
    if (rotateBlades)
-      bladeAngle = std::fmod(bladeAngle + 0.045 * elapsed, 360.0);
+   {
+      const double elapsedSeconds = elapsed / 1000.0;
+      const double bladeDegrees =
+         baseBladeDegreesPerSecond * windSpeed * elapsedSeconds;
+      bladeAngle = std::fmod(bladeAngle + bladeDegrees, 360.0);
+   }
    if (moveLight)
       lightAngle = std::fmod(lightAngle + 0.025 * elapsed, 360.0);
 

@@ -9,6 +9,10 @@ final-project codebase. It preserves the handmade textured scene, moving
 positional light, animation, navigation, and object inspection while adding
 renewable-energy structures and restrained secondary scenery.
 
+Turbine animation includes an interactive wind-speed model. The shared wind
+speed controls all three turbines, with the original blade speed preserved at
+the default wind speed of 1.0.
+
 The current scene contains:
 - three handmade animated wind turbines
 - a handmade barn/shed
@@ -62,7 +66,8 @@ t                 Toggle textures
 g                 Toggle greenhouse glass visibility
 Space             Pause/resume automatic light movement
 , and .           Move the light angle manually
-[ and ]           Lower/raise the light
+[ and ]           Decrease/increase wind speed
+< and >           Lower/raise the light
 q or ESC          Exit
 
 Default State
@@ -70,6 +75,7 @@ Default State
 The program starts in a perspective overview with lighting, textures, depth
 testing, moving light, and turbine animation enabled.
 Greenhouse glass is visible and transparent by default.
+Wind speed starts at 1.0 and can be adjusted from 0.0 through 5.0.
 
 Code Reuse and Project Phases
 -----------------------------
@@ -97,6 +103,14 @@ Phase 2 transparency changes include:
 - depth testing retained while glass depth writes are temporarily disabled
 - depth writes restored and blending disabled immediately after drawing glass
 - g/G glass visibility toggle and HUD glass-state display
+
+Phase 3 wind-speed changes include:
+- shared wind speed for all turbines, clamped from 0.0 through 5.0
+- frame-rate-independent blade animation based on elapsed wall-clock time
+- linear blade-speed formula: 45 degrees/second multiplied by wind speed
+- default wind speed 1.0 retains the prior 45 degrees/second, or 7.5 RPM
+- [ and ] wind-speed controls and remapped < and > light-height controls
+- HUD display of wind speed, turbine RPM, and blade pause state
 
 No GLSL shader, GLEW dependency, or fog is included yet.
 
