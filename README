@@ -52,7 +52,7 @@ Controls
     r                 Pause/resume turbine blades
     a                 Toggle coordinate axes
     l                 Toggle lighting
-    f or F            Toggle distance fog
+    f or F            Toggle distance fog (off at startup)
     w or W            Toggle wind-flow ribbons
     [ or ]            Decrease/increase shared wind speed
     t                 Toggle textures

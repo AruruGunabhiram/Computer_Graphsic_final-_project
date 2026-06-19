@@ -93,7 +93,9 @@ int glassVisible = 1;
 int moveLight = 1;
 int shaderEnabled = 1;
 int windFlowVisible = 1;
-int fogEnabled = 1;
+// Fog remains available through the 'f' toggle but starts disabled so the
+// complete energy facility is clear and readable on first launch.
+int fogEnabled = 0;
 GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
@@ -369,6 +371,21 @@ void drawBox(double x, double y, double z,
    glScaled(sx, sy, sz);
    drawBoxUnit();
    glPopMatrix();
+}
+
+// Set only the specular portion of the current fixed-pipeline material.
+// Object color still supplies ambient/diffuse response through GL_COLOR_MATERIAL.
+void SetMaterial(float red, float green, float blue, float shininess)
+{
+   const float specular[] = {red, green, blue, 1.0f};
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shininess);
+}
+
+// Restore the neutral scene material after an object-specific material.
+void ResetMaterial()
+{
+   SetMaterial(0.22f, 0.22f, 0.22f, 24.0f);
 }
 
 // Draw one handmade turbine blade with front, back, and edge normals.
@@ -1189,12 +1206,9 @@ void drawGreenhouseGlassPanels()
 {
    const double roofAngle = 32.735;
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
-   const float glassSpecular[] = {0.70f, 0.82f, 0.86f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glDisable(GL_TEXTURE_2D);
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, glassSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0f);
+   SetMaterial(0.38f, 0.50f, 0.54f, 52.0f);
    glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
 
    // Back wall uses two broad panes.
@@ -1231,8 +1245,7 @@ void drawGreenhouseGlassPanels()
       glPopMatrix();
    }
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Draw the origin-centered greenhouse in one of two explicit render passes.
@@ -1615,6 +1628,10 @@ void drawSheep(double phase = 0.0)
    const double legSwing = 14.0 * std::sin(2.8 * timeSeconds + phase);
    const double headBob = 0.035 * std::sin(2.8 * timeSeconds + phase);
 
+   // Wool and skin are matte, preventing metallic highlights inherited from
+   // energy equipment drawn earlier in the frame.
+   SetMaterial(0.04f, 0.04f, 0.04f, 6.0f);
+
    glColor3f(0.90f, 0.88f, 0.80f);
    glPushMatrix();
    glTranslated(0, 1.02, 0);
@@ -1661,6 +1678,8 @@ void drawSheep(double phase = 0.0)
    glRotated(-28, 1, 0, 0);
    drawLowPolyEllipsoid(0.18, 0.16, 0.24);
    glPopMatrix();
+
+   ResetMaterial();
 }
 
 // Draw the fenced paddock and five sheep following fixed elliptical paths.
@@ -1713,11 +1732,8 @@ void drawFarmer()
 {
    const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
    const double waveAngle = 18.0 * std::sin(2.6 * timeSeconds);
-   const float clothSpecular[] = {0.08f, 0.08f, 0.08f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, clothSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+   SetMaterial(0.06f, 0.06f, 0.06f, 8.0f);
 
    // Boots and separated legs keep the silhouette readable from mode 9.
    glColor3f(0.16f, 0.12f, 0.08f);
@@ -1777,8 +1793,7 @@ void drawFarmer()
    drawBox(0, 2.85, 0, 0.66, 0.28, 0.56);
    glDisable(GL_TEXTURE_2D);
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Place the weather station and farm figures in their functional full-scene
@@ -2299,7 +2314,6 @@ void ConfigureLighting(const float position[4])
    const float specularLight[] = {0.45f, 0.43f, 0.38f, 1.0f};
    const float materialAmbient[] = {0.25f, 0.25f, 0.25f, 1.0f};
    const float materialDiffuse[] = {0.80f, 0.80f, 0.80f, 1.0f};
-   const float materialSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glEnable(GL_NORMALIZE);
    glEnable(GL_LIGHTING);
@@ -2311,8 +2325,7 @@ void ConfigureLighting(const float position[4])
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, materialAmbient);
    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, materialDiffuse);
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, materialSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 
    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
    glEnable(GL_COLOR_MATERIAL);
