@@ -3,8 +3,8 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 6 preserves the coupled wind-flow visualization and adds outdoor
- * distance fog plus final fixed-pipeline lighting/material polish.
+ * Final review build: textured renewable-energy farm with coupled turbine
+ * and GLSL wind animation, transparency, lighting, and distance fog.
  */
 
 #ifdef __APPLE__
@@ -53,31 +53,43 @@ struct FenceSection
    double rotation;
 };
 
-int axes = 1;          // Display axes
-int mode = 1;          // Camera/projection mode; start in perspective overview
-int inspectionMode = 0; // Object group selected for inspection
-int rotateBlades = 1;  // Animate windmill blades
-int lighting = 1;      // Toggle lighting on/off
-int textures = 1;      // Toggle textures on/off
-int glassVisible = 1;  // Toggle transparent greenhouse glazing
-int moveLight = 1;     // Pause/resume moving light
-int shaderEnabled = 1; // Use GLSL for ribbons when the program is available
+// -----------------------------------------------------------------------------
+// Constants and global application state
+// -----------------------------------------------------------------------------
+
+const double minWindSpeed = 0.0;
+const double maxWindSpeed = 5.0;
+const double windSpeedStep = 0.25;
+const double baseBladeDegreesPerSecond = 45.0;
+const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
+const float fogStart = 14.0f;
+const float fogEnd = 32.0f;
+
+int axes = 1;
+int mode = 1;
+int inspectionMode = 0;
+int rotateBlades = 1;
+int lighting = 1;
+int textures = 1;
+int glassVisible = 1;
+int moveLight = 1;
+int shaderEnabled = 1;
 int windFlowVisible = 1;
 int fogEnabled = 1;
 GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
 double lightHeight = 5;
-int th = 35;           // Overhead azimuth
-int ph = 25;           // Overhead elevation
-int fov = 60;          // Perspective field of view
-double asp = 1;        // Window aspect ratio
-double dim = 9;        // Size of the overhead world
-double bladeAngle = 0; // Shared blade rotation
-double fpX = 0;        // First-person X position
-double fpY = 1;        // First-person eye height
-double fpZ = 12;       // First-person Z position
-int fpYaw = 0;         // First-person heading
+int th = 35;
+int ph = 25;
+int fov = 60;
+double asp = 1;
+double dim = 9;
+double bladeAngle = 0;
+double fpX = 0;
+double fpY = 1;
+double fpZ = 12;
+int fpYaw = 0;
 double viewTargetX = 0;
 double viewTargetY = 1;
 double viewTargetZ = 0;
@@ -89,148 +101,9 @@ unsigned int textureRoof = 0;
 unsigned int texturePath = 0;
 unsigned int textureMetal = 0;
 
-const double minWindSpeed = 0.0;
-const double maxWindSpeed = 5.0;
-const double windSpeedStep = 0.25;
-const double baseBladeDegreesPerSecond = 45.0;
-const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
-const float fogStart = 14.0f;
-const float fogEnd = 32.0f;
-
-// Read an entire GLSL source file. Missing files are non-fatal.
-bool ReadTextFile(const char* file, std::string& text)
-{
-   std::ifstream input(file);
-   if (!input)
-   {
-      std::fprintf(stderr, "Shader error: cannot open %s\n", file);
-      return false;
-   }
-
-   text.assign(std::istreambuf_iterator<char>(input),
-               std::istreambuf_iterator<char>());
-   if (!input.good() && !input.eof())
-   {
-      std::fprintf(stderr, "Shader error: cannot read %s\n", file);
-      text.clear();
-      return false;
-   }
-   return true;
-}
-
-// Print a shader compiler log when compilation fails.
-void PrintShaderLog(GLuint shader, const char* file)
-{
-   GLint length = 0;
-   glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-   if (length <= 1)
-      return;
-
-   std::vector<GLchar> log(length);
-   glGetShaderInfoLog(shader, length, 0, &log[0]);
-   std::fprintf(stderr, "Shader compile log (%s):\n%s\n", file, &log[0]);
-}
-
-// Print a program linker log when linking fails.
-void PrintProgramLog(GLuint program)
-{
-   GLint length = 0;
-   glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-   if (length <= 1)
-      return;
-
-   std::vector<GLchar> log(length);
-   glGetProgramInfoLog(program, length, 0, &log[0]);
-   std::fprintf(stderr, "Shader link log:\n%s\n", &log[0]);
-}
-
-// Compile one shader stage and return zero instead of terminating on failure.
-GLuint CompileShader(GLenum type, const char* file)
-{
-   std::string source;
-   if (!ReadTextFile(file, source))
-      return 0;
-
-   const GLchar* sourcePointer = source.c_str();
-   const GLuint shader = glCreateShader(type);
-   if (!shader)
-   {
-      std::fprintf(stderr, "Shader error: glCreateShader failed for %s\n", file);
-      return 0;
-   }
-
-   glShaderSource(shader, 1, &sourcePointer, 0);
-   glCompileShader(shader);
-
-   GLint compiled = GL_FALSE;
-   glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-   if (!compiled)
-   {
-      PrintShaderLog(shader, file);
-      glDeleteShader(shader);
-      return 0;
-   }
-   return shader;
-}
-
-// Compile and link the future wind shader, returning zero on any failure.
-GLuint CreateShaderProgram(const char* vertexFile, const char* fragmentFile)
-{
-   const GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexFile);
-   if (!vertexShader)
-      return 0;
-
-   const GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentFile);
-   if (!fragmentShader)
-   {
-      glDeleteShader(vertexShader);
-      return 0;
-   }
-
-   const GLuint program = glCreateProgram();
-   if (!program)
-   {
-      std::fprintf(stderr, "Shader error: glCreateProgram failed\n");
-      glDeleteShader(vertexShader);
-      glDeleteShader(fragmentShader);
-      return 0;
-   }
-
-   glAttachShader(program, vertexShader);
-   glAttachShader(program, fragmentShader);
-   glLinkProgram(program);
-
-   GLint linked = GL_FALSE;
-   glGetProgramiv(program, GL_LINK_STATUS, &linked);
-   glDetachShader(program, vertexShader);
-   glDetachShader(program, fragmentShader);
-   glDeleteShader(vertexShader);
-   glDeleteShader(fragmentShader);
-
-   if (!linked)
-   {
-      PrintProgramLog(program);
-      glDeleteProgram(program);
-      return 0;
-   }
-   return program;
-}
-
-// Safely verify uniform access without drawing or shading the existing scene.
-void CheckWindShader()
-{
-   if (!shaderEnabled || !windProgram)
-      return;
-
-   glUseProgram(windProgram);
-   const GLint timeLocation = glGetUniformLocation(windProgram, "time");
-   const GLint windSpeedLocation = glGetUniformLocation(windProgram, "windSpeed");
-   if (timeLocation >= 0)
-      glUniform1f(timeLocation, 0.0f);
-   if (windSpeedLocation >= 0)
-      glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
-   glUseProgram(0);
-}
+// -----------------------------------------------------------------------------
+// General utilities
+// -----------------------------------------------------------------------------
 
 // Reverse byte order when reading a BMP created on opposite-endian hardware.
 void Reverse(void* value, int bytes)
@@ -337,6 +210,11 @@ unsigned int LoadTexBMP(const char* file)
    return texture;
 }
 
+// -----------------------------------------------------------------------------
+// Camera, projection, and HUD
+// -----------------------------------------------------------------------------
+
+// Return the readable name of the active camera projection.
 const char* ModeName()
 {
    switch (mode)
@@ -411,6 +289,10 @@ void DrawAxes()
    glRasterPos3d(0, 0, len);
    glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, 'Z');
 }
+
+// -----------------------------------------------------------------------------
+// Primitive geometry
+// -----------------------------------------------------------------------------
 
 // Draw a unit textured box with outward normals on all six faces.
 void drawBoxUnit(double repeatX = 1, double repeatY = 1, double repeatZ = 1)
@@ -549,7 +431,9 @@ void drawHubUnit()
    glEnd();
 }
 
-// Draw the tapered turbine tower and nacelle using handmade geometry.
+// Build the turbine support from a square footing, four tapered tower faces,
+// and a box nacelle. The face normals account for the taper so lighting remains
+// correct, while the rotor is assembled separately from four blades and a hub.
 void drawWindmillBaseUnit()
 {
    const double taper = 0.21 / 2.61;
@@ -595,6 +479,10 @@ void drawWindmillBaseUnit()
    drawBoxUnit(2, 1, 2);
    glPopMatrix();
 }
+
+// -----------------------------------------------------------------------------
+// Object geometry
+// -----------------------------------------------------------------------------
 
 // Draw a complete turbine model at the origin for later instancing.
 void drawWindmillUnit(double bladeOffset)
@@ -1159,6 +1047,147 @@ void drawGreenhouseTransparent()
    glDisable(GL_BLEND);
 }
 
+// -----------------------------------------------------------------------------
+// Wind ribbons and GLSL shader setup
+// -----------------------------------------------------------------------------
+
+// Read an entire GLSL source file. Missing files are non-fatal because the
+// ribbons have a fixed-pipeline fallback.
+bool ReadTextFile(const char* file, std::string& text)
+{
+   std::ifstream input(file);
+   if (!input)
+   {
+      std::fprintf(stderr, "Shader error: cannot open %s\n", file);
+      return false;
+   }
+
+   text.assign(std::istreambuf_iterator<char>(input),
+               std::istreambuf_iterator<char>());
+   if (!input.good() && !input.eof())
+   {
+      std::fprintf(stderr, "Shader error: cannot read %s\n", file);
+      text.clear();
+      return false;
+   }
+   return true;
+}
+
+// Print a shader compiler log when compilation fails.
+void PrintShaderLog(GLuint shader, const char* file)
+{
+   GLint length = 0;
+   glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+   if (length <= 1)
+      return;
+
+   std::vector<GLchar> log(length);
+   glGetShaderInfoLog(shader, length, 0, &log[0]);
+   std::fprintf(stderr, "Shader compile log (%s):\n%s\n", file, &log[0]);
+}
+
+// Print a program linker log when linking fails.
+void PrintProgramLog(GLuint program)
+{
+   GLint length = 0;
+   glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+   if (length <= 1)
+      return;
+
+   std::vector<GLchar> log(length);
+   glGetProgramInfoLog(program, length, 0, &log[0]);
+   std::fprintf(stderr, "Shader link log:\n%s\n", &log[0]);
+}
+
+// Compile one GLSL stage, report its diagnostics, and return zero on failure.
+GLuint CompileShader(GLenum type, const char* file)
+{
+   std::string source;
+   if (!ReadTextFile(file, source))
+      return 0;
+
+   const GLchar* sourcePointer = source.c_str();
+   const GLuint shader = glCreateShader(type);
+   if (!shader)
+   {
+      std::fprintf(stderr, "Shader error: glCreateShader failed for %s\n", file);
+      return 0;
+   }
+
+   glShaderSource(shader, 1, &sourcePointer, 0);
+   glCompileShader(shader);
+
+   GLint compiled = GL_FALSE;
+   glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+   if (!compiled)
+   {
+      PrintShaderLog(shader, file);
+      glDeleteShader(shader);
+      return 0;
+   }
+   return shader;
+}
+
+// Compile and link the wind vertex/fragment stages. Failure is non-fatal so
+// the rest of the scene remains usable with unshaded translucent ribbons.
+GLuint CreateShaderProgram(const char* vertexFile, const char* fragmentFile)
+{
+   const GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexFile);
+   if (!vertexShader)
+      return 0;
+
+   const GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentFile);
+   if (!fragmentShader)
+   {
+      glDeleteShader(vertexShader);
+      return 0;
+   }
+
+   const GLuint program = glCreateProgram();
+   if (!program)
+   {
+      std::fprintf(stderr, "Shader error: glCreateProgram failed\n");
+      glDeleteShader(vertexShader);
+      glDeleteShader(fragmentShader);
+      return 0;
+   }
+
+   glAttachShader(program, vertexShader);
+   glAttachShader(program, fragmentShader);
+   glLinkProgram(program);
+
+   GLint linked = GL_FALSE;
+   glGetProgramiv(program, GL_LINK_STATUS, &linked);
+   glDetachShader(program, vertexShader);
+   glDetachShader(program, fragmentShader);
+   glDeleteShader(vertexShader);
+   glDeleteShader(fragmentShader);
+
+   if (!linked)
+   {
+      PrintProgramLog(program);
+      glDeleteProgram(program);
+      return 0;
+   }
+   return program;
+}
+
+// Verify the shader uniforms once at startup without affecting scene drawing.
+void CheckWindShader()
+{
+   if (!shaderEnabled || !windProgram)
+      return;
+
+   glUseProgram(windProgram);
+   const GLint timeLocation = glGetUniformLocation(windProgram, "time");
+   const GLint windSpeedLocation = glGetUniformLocation(windProgram, "windSpeed");
+   if (timeLocation >= 0)
+      glUniform1f(timeLocation, 0.0f);
+   if (windSpeedLocation >= 0)
+      glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
+   glUseProgram(0);
+}
+
 // Draw handmade translucent wind-flow strips across the turbine field.
 // Only this function activates the wind shader; every exit restores program 0.
 // Texture coordinates carry along-strip phase and per-ribbon phase to GLSL.
@@ -1251,6 +1280,10 @@ void drawWindRibbons()
    glDisable(GL_BLEND);
 }
 
+// -----------------------------------------------------------------------------
+// Scene dispatch
+// -----------------------------------------------------------------------------
+
 // Draw the complete handmade solar-energy object group.
 void drawSolarGroup()
 {
@@ -1313,6 +1346,10 @@ void drawLightMarker(double x, double y, double z)
    glPopMatrix();
 }
 
+// -----------------------------------------------------------------------------
+// Lighting, fog, and transparency state
+// -----------------------------------------------------------------------------
+
 // Configure the fixed-pipeline positional light and material defaults.
 void ConfigureLighting(const float position[4])
 {
@@ -1358,6 +1395,10 @@ void ConfigureFog()
    glFogf(GL_FOG_END, fogEnd);
    glHint(GL_FOG_HINT, GL_NICEST);
 }
+
+// -----------------------------------------------------------------------------
+// GLUT callbacks
+// -----------------------------------------------------------------------------
 
 // Render the selected object group, scene overlays, and status HUD.
 void display()
@@ -1759,6 +1800,10 @@ void idle()
 
    glutPostRedisplay();
 }
+
+// -----------------------------------------------------------------------------
+// Initialization and main
+// -----------------------------------------------------------------------------
 
 // Initialize GLUT, load textures, and enter the event loop.
 int main(int argc, char* argv[])
