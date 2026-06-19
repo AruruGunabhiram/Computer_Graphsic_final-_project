@@ -3,8 +3,8 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 4 preserves fixed-pipeline rendering and adds portable GLSL loading
- * infrastructure for a future wind visualization.
+ * Phase 5 preserves fixed-pipeline scene rendering and adds shader-animated
+ * wind-flow ribbons coupled to the turbine wind-speed model.
  */
 
 #ifdef __APPLE__
@@ -61,7 +61,8 @@ int lighting = 1;      // Toggle lighting on/off
 int textures = 1;      // Toggle textures on/off
 int glassVisible = 1;  // Toggle transparent greenhouse glazing
 int moveLight = 1;     // Pause/resume moving light
-int shaderEnabled = 1; // Future wind shader toggle; fixed scene stays unshaded
+int shaderEnabled = 1; // Use GLSL for ribbons when the program is available
+int windFlowVisible = 1;
 GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
@@ -1128,6 +1129,80 @@ void drawGreenhouseTransparent()
    glDisable(GL_BLEND);
 }
 
+// Draw handmade translucent wind-flow strips across the turbine field.
+// Only this function activates the wind shader; every exit restores program 0.
+// Texture coordinates carry along-strip phase and per-ribbon phase to GLSL.
+void drawWindRibbons()
+{
+   if (!windFlowVisible || (inspectionMode != 0 && inspectionMode != 1))
+      return;
+
+   const int ribbonCount = 12;
+   const int segmentCount = 40;
+   const double ribbonZ[ribbonCount] =
+   {
+      -4.8, -4.0, -3.3, -2.6, -1.8, -1.0,
+      -0.2,  0.6,  1.4,  2.2,  3.1,  4.0
+   };
+
+   glDisable(GL_LIGHTING);
+   glDisable(GL_TEXTURE_2D);
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glDepthMask(GL_FALSE);
+
+   const bool useShader = shaderEnabled && windProgram;
+   if (useShader)
+   {
+      glUseProgram(windProgram);
+
+      // The same windSpeed that advances turbine blades controls shader travel.
+      const float elapsedSeconds =
+         static_cast<float>(glutGet(GLUT_ELAPSED_TIME)) / 1000.0f;
+      const GLint timeLocation = glGetUniformLocation(windProgram, "time");
+      const GLint windSpeedLocation =
+         glGetUniformLocation(windProgram, "windSpeed");
+      if (timeLocation >= 0)
+         glUniform1f(timeLocation, elapsedSeconds);
+      if (windSpeedLocation >= 0)
+         glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
+   }
+
+   for (int ribbon = 0; ribbon < ribbonCount; ++ribbon)
+   {
+      const double ribbonPhase = 0.73 * ribbon;
+      const double centerY = 0.75 + 0.22 * (ribbon % 7);
+      const double halfWidth = 0.055 + 0.012 * (ribbon % 3);
+
+      // The fallback retains readable curved airflow when GLSL is unavailable.
+      glColor4f(0.58f, 0.84f, 1.0f, useShader ? 1.0f : 0.24f);
+      glBegin(GL_QUAD_STRIP);
+      for (int segment = 0; segment <= segmentCount; ++segment)
+      {
+         const double along =
+            static_cast<double>(segment) / segmentCount;
+         const double x = -8.5 + 17.0 * along;
+         const double curve =
+            0.32 * std::sin(0.55 * x + ribbonPhase);
+         const double y =
+            centerY + 0.08 * std::sin(0.9 * x + ribbonPhase);
+         const double z = ribbonZ[ribbon] + curve;
+
+         glTexCoord2d(along, ribbonPhase);
+         glVertex3d(x, y - halfWidth, z);
+         glTexCoord2d(along, ribbonPhase);
+         glVertex3d(x, y + halfWidth, z);
+      }
+      glEnd();
+   }
+
+   // Never allow the ribbon shader to leak into glass, HUD, or later frames.
+   glUseProgram(0);
+
+   glDepthMask(GL_TRUE);
+   glDisable(GL_BLEND);
+}
+
 // Draw the complete handmade solar-energy object group.
 void drawSolarGroup()
 {
@@ -1167,9 +1242,12 @@ void drawInspectedOpaqueObjects()
    }
 }
 
-// Draw transparent objects last for the full scene and greenhouse inspection.
+// Draw transparent objects after opaque geometry. Wind renders before glass so
+// the greenhouse glazing can tint airflow that visually passes behind it.
 void drawInspectedTransparentObjects()
 {
+   drawWindRibbons();
+
    if (inspectionMode == 0 || inspectionMode == 3)
       drawGreenhouseTransparent();
 }
@@ -1295,13 +1373,13 @@ void display()
                  lightAngle, lightHeight, moveLight ? "running" : "paused",
                  lighting ? "on" : "off");
 
-   char stateText[200];
+   char stateText[220];
    std::snprintf(stateText, sizeof(stateText),
-                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s   Shader: %s   Load: %s",
+                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s   Shader: %s   Wind Flow: %s",
                  InspectionName(), lighting ? "on" : "off",
                  textures ? "on" : "off", glassVisible ? "on" : "off",
-                 shaderEnabled ? "On" : "Off",
-                 windProgram ? "Loaded" : "Failed");
+                 shaderEnabled && windProgram ? "On" : "Off",
+                 windFlowVisible ? "On" : "Off");
 
    const double bladeRpm =
       rotateBlades ? baseBladeDegreesPerSecond * windSpeed / 6.0 : 0.0;
@@ -1316,7 +1394,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  S: shader  [ / ]: wind");
+   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  S: wind flow  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -1466,7 +1544,8 @@ void key(unsigned char ch, int, int)
    }
    else if (ch == 's' || ch == 'S')
    {
-      shaderEnabled = 1 - shaderEnabled;
+      windFlowVisible = 1 - windFlowVisible;
+      shaderEnabled = windFlowVisible && windProgram;
    }
    else if (ch == 'l' || ch == 'L')
    {
@@ -1656,7 +1735,7 @@ int main(int argc, char* argv[])
       {
          shaderEnabled = 0;
          std::fprintf(stderr,
-                      "Wind shader unavailable; continuing in shader-off mode.\n");
+                      "Wind shader unavailable; using fixed-pipeline ribbons.\n");
       }
    }
 

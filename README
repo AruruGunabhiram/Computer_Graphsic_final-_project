@@ -9,9 +9,10 @@ final-project codebase. It preserves the handmade textured scene, moving
 positional light, animation, navigation, and object inspection while adding
 renewable-energy structures and restrained secondary scenery.
 
-Turbine animation includes an interactive wind-speed model. The shared wind
-speed controls all three turbines, with the original blade speed preserved at
-the default wind speed of 1.0.
+The main graduate contribution is a GLSL-animated wind-flow visualization
+coupled to the physical turbine animation. The shared wind speed controls all
+three turbine rotors and the travel rate of translucent airflow ribbons, with
+the original blade speed preserved at the default wind speed of 1.0.
 
 The current scene contains:
 - three handmade animated wind turbines
@@ -22,14 +23,15 @@ The current scene contains:
 - a fence and path
 - a textured ground plane
 - a visible moving positional light
+- twelve translucent wind-flow ribbons crossing the turbine field
 
 The greenhouse has transparent blue-green wall and roof glass rendered with
 fixed-pipeline OpenGL alpha blending. The frame and all other opaque scene
 objects are drawn first. The glass is drawn last with depth testing still
 enabled but depth writes temporarily disabled, so objects behind the glass
 remain visible without the glass breaking normal hidden-surface removal.
-Portable shader loading infrastructure is included for the future wind
-visualization. Wind ribbons and fog will be implemented in later phases.
+The wind ribbons use wind.vert and wind.frag for animated displacement and
+air-flow coloring. Fog will be implemented in a later phase.
 
 Build Instructions
 ------------------
@@ -71,7 +73,7 @@ a                 Toggle axes
 l                 Toggle lighting
 t                 Toggle textures
 g                 Toggle greenhouse glass visibility
-S                 Toggle future wind shader state
+S                 Toggle shader-based wind flow/ribbons
 Space             Pause/resume automatic light movement
 , and .           Move the light angle manually
 [ and ]           Decrease/increase wind speed
@@ -84,9 +86,11 @@ The program starts in a perspective overview with lighting, textures, depth
 testing, moving light, and turbine animation enabled.
 Greenhouse glass is visible and transparent by default.
 Wind speed starts at 1.0 and can be adjusted from 0.0 through 5.0.
-The wind shader is enabled by default when it compiles and links successfully.
+The wind flow is visible by default. Its shader is enabled when it compiles and
+links successfully.
 If GLSL is unsupported or either shader file fails to load, compile, or link,
-the program reports the error and continues in shader-off mode.
+the program reports the error and continues with fixed-pipeline fallback
+ribbons.
 
 Code Reuse and Project Phases
 -----------------------------
@@ -130,9 +134,19 @@ Phase 4 shader infrastructure includes:
 - optional USEGLEW build support without an unconditional GLEW dependency
 - GL_GLEXT_PROTOTYPES on non-Apple builds that do not use GLEW
 - S shader toggle and HUD loaded/failed status
-- fixed-pipeline scene rendering remains unchanged and no wind ribbons are drawn
+- fixed-pipeline scene rendering remained unchanged before Phase 5 ribbons
 
-No wind ribbons or fog are included yet.
+Phase 5 wind-flow contribution includes:
+- twelve handmade GL_QUAD_STRIP airflow ribbons passing through the farm
+- vertex-shader sine displacement driven by time and windSpeed uniforms
+- fragment-shader blue/white coloring with animated translucent alpha
+- shared windSpeed coupling ribbon travel speed to turbine blade RPM
+- ribbons rendered after opaque geometry with depth writes disabled
+- greenhouse glass rendered after ribbons for controlled transparency layering
+- S wind-flow toggle and HUD Shader/Wind Flow status
+- fixed-pipeline translucent ribbon fallback when shader loading fails
+
+No fog is included yet.
 
 Textures
 --------
