@@ -19,9 +19,12 @@ The current scene contains:
 - a textured ground plane
 - a visible moving positional light
 
-The greenhouse glass is currently an opaque colored placeholder drawn in a
-separate function. Real transparency, shaders, wind-flow visualization, and
-fog will be implemented in later phases.
+The greenhouse has transparent blue-green wall and roof glass rendered with
+fixed-pipeline OpenGL alpha blending. The frame and all other opaque scene
+objects are drawn first. The glass is drawn last with depth testing still
+enabled but depth writes temporarily disabled, so objects behind the glass
+remain visible without the glass breaking normal hidden-surface removal.
+Shaders, wind-flow visualization, and fog will be implemented in later phases.
 
 Build Instructions
 ------------------
@@ -56,6 +59,7 @@ r                 Pause/resume turbine blade rotation
 a                 Toggle axes
 l                 Toggle lighting
 t                 Toggle textures
+g                 Toggle greenhouse glass visibility
 Space             Pause/resume automatic light movement
 , and .           Move the light angle manually
 [ and ]           Lower/raise the light
@@ -65,9 +69,10 @@ Default State
 -------------
 The program starts in a perspective overview with lighting, textures, depth
 testing, moving light, and turbine animation enabled.
+Greenhouse glass is visible and transparent by default.
 
-Code Reuse and Phase 1 Changes
-------------------------------
+Code Reuse and Project Phases
+-----------------------------
 The handmade turbine, barn, fence, path, ground, BMP loader, lighting,
 texture mapping, navigation, and animation are reused from the author's
 prior course project.
@@ -81,12 +86,19 @@ Phase 1 changes include:
 - updated HUD showing project, camera, inspection, lighting, and texture state
 
 Current object additions include:
-- greenhouse frame, roof structure, and separate opaque glass placeholder
+- greenhouse frame, roof structure, and separately rendered glass panels
 - angled photovoltaic panels with handmade supports and specular material
 - low-poly trees with handmade trunks and cone canopies
 
-No GLSL shader, GLEW dependency, fog, blending, or real transparency is
-included yet.
+Phase 2 transparency changes include:
+- opaque greenhouse frame/base rendering separated from glass rendering
+- all opaque objects rendered before the transparent glass pass
+- standard source-alpha blending for wall and roof glass
+- depth testing retained while glass depth writes are temporarily disabled
+- depth writes restored and blending disabled immediately after drawing glass
+- g/G glass visibility toggle and HUD glass-state display
+
+No GLSL shader, GLEW dependency, or fog is included yet.
 
 Textures
 --------
@@ -99,6 +111,6 @@ Only textures currently used by the program are included:
 
 Known Limitations
 -----------------
-- Greenhouse glazing is opaque until the later transparency phase.
+- Greenhouse glass uses fixed-pipeline blending; no GLSL effects are applied.
 - Texture and shader-ready asset paths are relative, so run ./final from the
   project directory.

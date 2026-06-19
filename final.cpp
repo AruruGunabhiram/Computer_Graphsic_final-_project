@@ -3,7 +3,8 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 1 preserves the textured renewable-energy scene and adds object inspection.
+ * Phase 2 preserves the textured renewable-energy scene and adds greenhouse
+ * transparency after the opaque scene pass.
  */
 
 #ifdef __APPLE__
@@ -49,6 +50,7 @@ int inspectionMode = 0; // Object group selected for inspection
 int rotateBlades = 1;  // Animate windmill blades
 int lighting = 1;      // Toggle lighting on/off
 int textures = 1;      // Toggle textures on/off
+int glassVisible = 1;  // Toggle transparent greenhouse glazing
 int moveLight = 1;     // Pause/resume moving light
 double lightAngle = 90;
 double lightHeight = 5;
@@ -769,10 +771,9 @@ void drawGreenhouseFrame()
    glPopMatrix();
 }
 
-// Draw opaque, lightly colored greenhouse panes as a separate pass.
-// Thin wall boxes and rotated roof boxes provide correct front/back normals
-// and can later be replaced by blended glass without changing the frame.
-void drawGreenhouseGlassPlaceholder()
+// Draw the greenhouse wall and roof glass geometry.
+// Blending and depth-write state are configured by the transparent scene pass.
+void drawGreenhouseGlassPanels()
 {
    const double roofAngle = 32.735;
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
@@ -780,7 +781,7 @@ void drawGreenhouseGlassPlaceholder()
    glDisable(GL_TEXTURE_2D);
    glPushMatrix();
    glTranslated(-4.2, 0, 3.4);
-   glColor3f(0.48f, 0.76f, 0.78f);
+   glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
 
    for (int side = -1; side <= 1; side += 2)
    {
@@ -951,11 +952,28 @@ void drawBarnGroup()
    drawBarnOrShed();
 }
 
-// Draw the complete greenhouse while keeping glass separate for later blending.
-void drawGreenhouseGroup()
+// Draw only the opaque greenhouse base, posts, rails, ridge, and rafters.
+void drawGreenhouseOpaque()
 {
-   drawGreenhouseGlassPlaceholder();
    drawGreenhouseFrame();
+}
+
+// Draw transparent greenhouse glass after every opaque object.
+void drawGreenhouseTransparent()
+{
+   if (!glassVisible)
+      return;
+
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+   // Keep depth testing enabled so opaque surfaces still occlude the glass.
+   // Disable only depth writes so glass does not hide objects behind it.
+   glDepthMask(GL_FALSE);
+   drawGreenhouseGlassPanels();
+   glDepthMask(GL_TRUE);
+
+   glDisable(GL_BLEND);
 }
 
 // Draw the complete handmade solar-energy object group.
@@ -973,28 +991,35 @@ void drawSecondaryObjects()
    drawTreeGroup();
 }
 
-// Draw every completed object group in the main farm scene.
-void drawFullScene()
+// Draw every opaque object group in the main farm scene.
+void drawFullSceneOpaque()
 {
    drawSecondaryObjects();
    drawBarnGroup();
    drawTurbineGroup();
-   drawGreenhouseGroup();
+   drawGreenhouseOpaque();
    drawSolarGroup();
 }
 
-// Dispatch scene rendering according to the active inspection selection.
-void drawInspectedObjects()
+// Dispatch opaque scene rendering according to the active inspection selection.
+void drawInspectedOpaqueObjects()
 {
    switch (inspectionMode)
    {
-      case 0: drawFullScene();        break;
+      case 0: drawFullSceneOpaque();  break;
       case 1: drawTurbineGroup();     break;
       case 2: drawBarnGroup();        break;
-      case 3: drawGreenhouseGroup();  break;
+      case 3: drawGreenhouseOpaque(); break;
       case 4: drawSolarGroup();       break;
       case 5: drawSecondaryObjects(); break;
    }
+}
+
+// Draw transparent objects last for the full scene and greenhouse inspection.
+void drawInspectedTransparentObjects()
+{
+   if (inspectionMode == 0 || inspectionMode == 3)
+      drawGreenhouseTransparent();
 }
 
 // Draw a visible marker at the moving positional light source.
@@ -1082,12 +1107,21 @@ void display()
    else
       glDisable(GL_LIGHTING);
 
-   drawInspectedObjects();
+   drawInspectedOpaqueObjects();
    glDisable(GL_LIGHTING);
    if (axes)
       DrawAxes();
 
+   if (lighting)
+      glEnable(GL_LIGHTING);
+
+   // Transparent glass is drawn after all opaque scene geometry so the
+   // existing depth buffer can reject hidden fragments without glass writing
+   // new depth values that would incorrectly conceal objects behind it.
+   drawInspectedTransparentObjects();
+
    glDisable(GL_DEPTH_TEST);
+   glDisable(GL_LIGHTING);
    glMatrixMode(GL_PROJECTION);
    glPushMatrix();
    glLoadIdentity();
@@ -1109,18 +1143,18 @@ void display()
                  lightAngle, lightHeight, moveLight ? "running" : "paused",
                  lighting ? "on" : "off");
 
-   char stateText[120];
+   char stateText[160];
    std::snprintf(stateText, sizeof(stateText),
-                 "Inspection: %s   Lighting: %s   Textures: %s",
+                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s",
                  InspectionName(), lighting ? "on" : "off",
-                 textures ? "on" : "off");
+                 textures ? "on" : "off", glassVisible ? "on" : "off");
 
    DrawText(10, 150, "Shader-Based Renewable Energy Farm Visualization");
    DrawText(10, 130, stateText);
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect objects  arrows: navigate  l: lighting  t: textures");
+   DrawText(10, 50, "0-5: inspect objects  arrows: navigate  l: lighting  t: textures  g: glass");
    DrawText(10, 30, "r: rotate blades  R: reset camera  SPACE: pause light  ,/.: light angle");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  [ / ]: light height  q/ESC: exit");
@@ -1263,6 +1297,10 @@ void key(unsigned char ch, int, int)
    else if (ch == 't' || ch == 'T')
    {
       textures = 1 - textures;
+   }
+   else if (ch == 'g' || ch == 'G')
+   {
+      glassVisible = 1 - glassVisible;
    }
    else if (ch == 'l' || ch == 'L')
    {
