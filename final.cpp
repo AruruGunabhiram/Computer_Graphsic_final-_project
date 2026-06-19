@@ -1707,22 +1707,78 @@ void drawSheepPaddock()
    glPopMatrix();
 }
 
-// Draw one origin-centered farmer with a hat, head, torso, arms, and legs.
+// Draw one origin-centered stylized farmer. The right arm is transformed about
+// its shoulder and waves with elapsed time; the rest of the pose stays fixed.
 void drawFarmer()
 {
-   glColor3f(0.78f, 0.58f, 0.42f);
-   drawBox(0, 2.35, 0, 0.58, 0.58, 0.52);
-   glColor3f(0.72f, 0.52f, 0.18f);
-   drawBox(0, 2.70, 0, 1.05, 0.12, 0.78);
-   drawBox(0, 2.86, 0, 0.62, 0.28, 0.55);
+   const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+   const double waveAngle = 18.0 * std::sin(2.6 * timeSeconds);
+   const float clothSpecular[] = {0.08f, 0.08f, 0.08f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
-   glColor3f(0.22f, 0.42f, 0.66f);
-   drawBox(0, 1.55, 0, 0.78, 1.05, 0.46);
-   drawBox(-0.58, 1.58, 0, 0.22, 1.05, 0.22);
-   drawBox( 0.58, 1.58, 0, 0.22, 1.05, 0.22);
-   glColor3f(0.20f, 0.24f, 0.28f);
-   drawBox(-0.22, 0.55, 0, 0.27, 1.10, 0.30);
-   drawBox( 0.22, 0.55, 0, 0.27, 1.10, 0.30);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, clothSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+
+   // Boots and separated legs keep the silhouette readable from mode 9.
+   glColor3f(0.16f, 0.12f, 0.08f);
+   drawBox(-0.22, 0.13, 0.06, 0.30, 0.26, 0.46);
+   drawBox( 0.22, 0.13, 0.06, 0.30, 0.26, 0.46);
+   glColor3f(0.18f, 0.25f, 0.34f);
+   drawBox(-0.22, 0.70, 0, 0.28, 0.92, 0.32);
+   drawBox( 0.22, 0.70, 0, 0.28, 0.92, 0.32);
+
+   // Shirt, overalls bib, and shoulder straps are simple raised cuboids.
+   glColor3f(0.70f, 0.20f, 0.16f);
+   drawBox(0, 1.55, 0, 0.88, 1.02, 0.48);
+   glColor3f(0.18f, 0.38f, 0.62f);
+   drawBox(0, 1.48, 0.255, 0.60, 0.70, 0.055);
+   drawBox(-0.24, 1.88, 0.255, 0.10, 0.42, 0.055);
+   drawBox( 0.24, 1.88, 0.255, 0.10, 0.42, 0.055);
+
+   // Left arm remains relaxed.
+   glColor3f(0.70f, 0.20f, 0.16f);
+   drawBox(-0.56, 1.56, 0, 0.24, 0.88, 0.26);
+   glColor3f(0.78f, 0.58f, 0.42f);
+   drawBox(-0.56, 1.04, 0, 0.24, 0.22, 0.24);
+
+   // Right arm waves from a fixed shoulder pivot. A bent forearm makes the
+   // gesture obvious while avoiding walking or full-body animation artifacts.
+   glPushMatrix();
+   glTranslated(0.52, 1.92, 0);
+   glRotated(-128.0 + waveAngle, 0, 0, 1);
+   glColor3f(0.70f, 0.20f, 0.16f);
+   drawBox(0, -0.40, 0, 0.24, 0.80, 0.26);
+   glTranslated(0, -0.78, 0);
+   glRotated(72, 0, 0, 1);
+   glColor3f(0.78f, 0.58f, 0.42f);
+   drawBox(0, -0.32, 0, 0.22, 0.64, 0.22);
+   drawBox(0, -0.69, 0, 0.28, 0.20, 0.26);
+   glPopMatrix();
+
+   // Block head, nose, eyes, and ears remain intentionally non-realistic.
+   glColor3f(0.78f, 0.58f, 0.42f);
+   drawBox(0, 2.34, 0, 0.62, 0.62, 0.54);
+   drawBox(0, 2.30, 0.30, 0.16, 0.18, 0.12);
+   drawBox(-0.35, 2.36, 0, 0.10, 0.20, 0.18);
+   drawBox( 0.35, 2.36, 0, 0.10, 0.20, 0.18);
+   glColor3f(0.08f, 0.07f, 0.06f);
+   drawBox(-0.14, 2.43, 0.291, 0.07, 0.07, 0.025);
+   drawBox( 0.14, 2.43, 0.291, 0.07, 0.07, 0.025);
+
+   // The broad textured brim and low crown read clearly as a farm hat.
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureWood);
+   }
+   glColor3f(0.76f, 0.57f, 0.20f);
+   drawBox(0, 2.69, 0, 1.10, 0.12, 0.82);
+   drawBox(0, 2.85, 0, 0.66, 0.28, 0.56);
+   glDisable(GL_TEXTURE_2D);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Place the weather station and farm figures in their functional full-scene
@@ -1736,7 +1792,8 @@ void drawFarmCharactersAndInstruments()
    glPopMatrix();
 
    glPushMatrix();
-   glTranslated(-20.0, 0, 21.0);
+   // Stand beside the paddock's east-side gate, clear of all sheep paths.
+   glTranslated(paddockZoneX + 8.8, 0, paddockZoneZ - 1.0);
    glRotated(-25, 0, 1, 0);
    drawFarmer();
    glPopMatrix();
