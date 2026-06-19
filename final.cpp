@@ -3,8 +3,8 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 5 preserves fixed-pipeline scene rendering and adds shader-animated
- * wind-flow ribbons coupled to the turbine wind-speed model.
+ * Phase 6 preserves the coupled wind-flow visualization and adds outdoor
+ * distance fog plus final fixed-pipeline lighting/material polish.
  */
 
 #ifdef __APPLE__
@@ -63,6 +63,7 @@ int glassVisible = 1;  // Toggle transparent greenhouse glazing
 int moveLight = 1;     // Pause/resume moving light
 int shaderEnabled = 1; // Use GLSL for ribbons when the program is available
 int windFlowVisible = 1;
+int fogEnabled = 1;
 GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
@@ -92,6 +93,9 @@ const double minWindSpeed = 0.0;
 const double maxWindSpeed = 5.0;
 const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
+const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
+const float fogStart = 14.0f;
+const float fogEnd = 32.0f;
 
 // Read an entire GLSL source file. Missing files are non-fatal.
 bool ReadTextFile(const char* file, std::string& text)
@@ -595,6 +599,13 @@ void drawWindmillBaseUnit()
 // Draw a complete turbine model at the origin for later instancing.
 void drawWindmillUnit(double bladeOffset)
 {
+   const float turbineSpecular[] = {0.55f, 0.58f, 0.62f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+
+   // Turbine metal receives a restrained highlight without looking chrome-like.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, turbineSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 42.0f);
+
    // The generic windmill stays at the origin so one model can be instanced.
    if (textures)
    {
@@ -630,6 +641,9 @@ void drawWindmillUnit(double bladeOffset)
    drawHubUnit();
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Transform and draw one turbine instance in the farm.
@@ -821,6 +835,13 @@ void drawGableRoofUnit()
 // Draw the textured barn/shed and its gable roof.
 void drawBarnOrShed()
 {
+   const float barnSpecular[] = {0.08f, 0.07f, 0.06f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+
+   // Wood and painted farm surfaces remain predominantly diffuse.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, barnSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+
    glPushMatrix();
    glTranslated(5.7, 0, 3.4);
    glRotated(-18, 0, 1, 0);
@@ -867,6 +888,9 @@ void drawBarnOrShed()
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
    glPopMatrix();
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Draw the greenhouse base, vertical posts, eave rails, ridge, and roof rafters.
@@ -930,8 +954,12 @@ void drawGreenhouseGlassPanels()
 {
    const double roofAngle = 32.735;
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
+   const float glassSpecular[] = {0.70f, 0.82f, 0.86f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glDisable(GL_TEXTURE_2D);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, glassSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0f);
    glPushMatrix();
    glTranslated(-4.2, 0, 3.4);
    glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
@@ -962,14 +990,16 @@ void drawGreenhouseGlassPanels()
    }
 
    glPopMatrix();
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Draw a dark photovoltaic panel as a shallow handmade box.
 // The top normal is transformed with the panel angle by OpenGL's normal matrix.
 void drawSolarPanelUnit()
 {
-   const float panelSpecular[] = {0.85f, 0.90f, 1.0f, 1.0f};
-   const float defaultSpecular[] = {0.25f, 0.25f, 0.25f, 1.0f};
+   const float panelSpecular[] = {0.58f, 0.68f, 0.82f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glDisable(GL_TEXTURE_2D);
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, panelSpecular);
@@ -1162,10 +1192,28 @@ void drawWindRibbons()
       const GLint timeLocation = glGetUniformLocation(windProgram, "time");
       const GLint windSpeedLocation =
          glGetUniformLocation(windProgram, "windSpeed");
+      const GLint fogEnabledLocation =
+         glGetUniformLocation(windProgram, "fogEnabled");
+      const GLint fogColorLocation =
+         glGetUniformLocation(windProgram, "fogColor");
+      const GLint fogStartLocation =
+         glGetUniformLocation(windProgram, "fogStart");
+      const GLint fogEndLocation =
+         glGetUniformLocation(windProgram, "fogEnd");
       if (timeLocation >= 0)
          glUniform1f(timeLocation, elapsedSeconds);
       if (windSpeedLocation >= 0)
          glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
+      // GLSL does not receive fixed-function fog automatically, so pass the
+      // same linear-fog parameters used by opaque and transparent fixed draws.
+      if (fogEnabledLocation >= 0)
+         glUniform1i(fogEnabledLocation, fogEnabled);
+      if (fogColorLocation >= 0)
+         glUniform4fv(fogColorLocation, 1, fogColor);
+      if (fogStartLocation >= 0)
+         glUniform1f(fogStartLocation, fogStart);
+      if (fogEndLocation >= 0)
+         glUniform1f(fogEndLocation, fogEnd);
    }
 
    for (int ribbon = 0; ribbon < ribbonCount; ++ribbon)
@@ -1268,12 +1316,12 @@ void drawLightMarker(double x, double y, double z)
 // Configure the fixed-pipeline positional light and material defaults.
 void ConfigureLighting(const float position[4])
 {
-   const float ambientLight[] = {0.15f, 0.15f, 0.15f, 1.0f};
-   const float diffuseLight[] = {0.75f, 0.72f, 0.65f, 1.0f};
-   const float specularLight[] = {0.35f, 0.35f, 0.30f, 1.0f};
+   const float ambientLight[] = {0.20f, 0.20f, 0.22f, 1.0f};
+   const float diffuseLight[] = {0.82f, 0.78f, 0.68f, 1.0f};
+   const float specularLight[] = {0.45f, 0.43f, 0.38f, 1.0f};
    const float materialAmbient[] = {0.25f, 0.25f, 0.25f, 1.0f};
    const float materialDiffuse[] = {0.80f, 0.80f, 0.80f, 1.0f};
-   const float materialSpecular[] = {0.25f, 0.25f, 0.25f, 1.0f};
+   const float materialSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glEnable(GL_NORMALIZE);
    glEnable(GL_LIGHTING);
@@ -1290,6 +1338,25 @@ void ConfigureLighting(const float position[4])
 
    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
    glEnable(GL_COLOR_MATERIAL);
+}
+
+// Configure subtle linear distance haze for all fixed-pipeline 3D geometry.
+// The color complements the clear color, while the distant end preserves the
+// full farm and leaves close inspection modes essentially unaffected.
+void ConfigureFog()
+{
+   if (!fogEnabled)
+   {
+      glDisable(GL_FOG);
+      return;
+   }
+
+   glEnable(GL_FOG);
+   glFogi(GL_FOG_MODE, GL_LINEAR);
+   glFogfv(GL_FOG_COLOR, fogColor);
+   glFogf(GL_FOG_START, fogStart);
+   glFogf(GL_FOG_END, fogEnd);
+   glHint(GL_FOG_HINT, GL_NICEST);
 }
 
 // Render the selected object group, scene overlays, and status HUD.
@@ -1323,6 +1390,8 @@ void display()
       gluLookAt(fpX, fpY, fpZ, lookX, fpY, lookZ, 0, 1, 0);
    }
 
+   ConfigureFog();
+
    const float lightPosition[] =
    {
       static_cast<float>(7 * Cos(lightAngle)),
@@ -1350,6 +1419,9 @@ void display()
    // new depth values that would incorrectly conceal objects behind it.
    drawInspectedTransparentObjects();
 
+   // Fog is a 3D scene effect; disable it before the screen-space HUD and
+   // restore it from fogEnabled at the start of the next frame.
+   glDisable(GL_FOG);
    glDisable(GL_DEPTH_TEST);
    glDisable(GL_LIGHTING);
    glMatrixMode(GL_PROJECTION);
@@ -1373,11 +1445,11 @@ void display()
                  lightAngle, lightHeight, moveLight ? "running" : "paused",
                  lighting ? "on" : "off");
 
-   char stateText[220];
+   char stateText[240];
    std::snprintf(stateText, sizeof(stateText),
-                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s   Shader: %s   Wind Flow: %s",
+                 "Inspection: %s   Lighting: %s   Fog: %s   Glass: %s   Shader: %s   Wind Flow: %s",
                  InspectionName(), lighting ? "on" : "off",
-                 textures ? "on" : "off", glassVisible ? "on" : "off",
+                 fogEnabled ? "On" : "Off", glassVisible ? "on" : "off",
                  shaderEnabled && windProgram ? "On" : "Off",
                  windFlowVisible ? "On" : "Off");
 
@@ -1394,7 +1466,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  S: wind flow  [ / ]: wind");
+   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -1550,6 +1622,10 @@ void key(unsigned char ch, int, int)
    else if (ch == 'l' || ch == 'L')
    {
       lighting = 1 - lighting;
+   }
+   else if (ch == 'f' || ch == 'F')
+   {
+      fogEnabled = 1 - fogEnabled;
    }
    else if (ch == ' ')
    {
@@ -1712,7 +1788,7 @@ int main(int argc, char* argv[])
    glutSpecialFunc(special);
    glutIdleFunc(idle);
 
-   glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+   glClearColor(0.07f, 0.09f, 0.12f, 1.0f);
    // The depth test makes nearer solid surfaces hide farther surfaces.
    glEnable(GL_DEPTH_TEST);
    glEnable(GL_NORMALIZE);

@@ -31,7 +31,8 @@ objects are drawn first. The glass is drawn last with depth testing still
 enabled but depth writes temporarily disabled, so objects behind the glass
 remain visible without the glass breaking normal hidden-surface removal.
 The wind ribbons use wind.vert and wind.frag for animated displacement and
-air-flow coloring. Fog will be implemented in a later phase.
+air-flow coloring. Subtle linear outdoor haze improves depth perception while
+preserving the greenhouse and complete farm silhouette.
 
 Build Instructions
 ------------------
@@ -71,6 +72,7 @@ R                 Reset to the default full-scene perspective camera
 r                 Pause/resume turbine blade rotation
 a                 Toggle axes
 l                 Toggle lighting
+F                 Toggle outdoor fog/haze
 t                 Toggle textures
 g                 Toggle greenhouse glass visibility
 S                 Toggle shader-based wind flow/ribbons
@@ -84,6 +86,7 @@ Default State
 -------------
 The program starts in a perspective overview with lighting, textures, depth
 testing, moving light, and turbine animation enabled.
+Linear outdoor fog is enabled by default.
 Greenhouse glass is visible and transparent by default.
 Wind speed starts at 1.0 and can be adjusted from 0.0 through 5.0.
 The wind flow is visible by default. Its shader is enabled when it compiles and
@@ -146,7 +149,14 @@ Phase 5 wind-flow contribution includes:
 - S wind-flow toggle and HUD Shader/Wind Flow status
 - fixed-pipeline translucent ribbon fallback when shader loading fails
 
-No fog is included yet.
+Phase 6 fog and lighting polish includes:
+- toggleable GL_LINEAR outdoor haze shared by opaque and transparent geometry
+- fog color (0.12, 0.16, 0.20), start distance 14, and end distance 32
+- matching eye-space fog calculations in the GLSL wind-ribbon shader
+- fog disabled and restored around the screen-space HUD
+- brighter moving-sun ambient/diffuse/specular balance
+- restrained turbine metal, solar-panel, glass, and barn material responses
+- F fog toggle and HUD fog/light movement status
 
 Textures
 --------

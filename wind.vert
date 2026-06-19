@@ -4,6 +4,7 @@ uniform float time;
 uniform float windSpeed;
 
 varying float flowPulse;
+varying float fogDistance;
 
 void main()
 {
@@ -18,6 +19,8 @@ void main()
    position.z += cos(wavePhase * 0.72) * (0.08 + 0.018 * windSpeed);
 
    flowPulse = 0.5 + 0.5 * sin(wavePhase * 1.35);
-   gl_Position = gl_ModelViewProjectionMatrix * position;
+   vec4 eyePosition = gl_ModelViewMatrix * position;
+   fogDistance = length(eyePosition.xyz);
+   gl_Position = gl_ProjectionMatrix * eyePosition;
    gl_FrontColor = gl_Color;
 }
