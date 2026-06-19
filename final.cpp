@@ -61,9 +61,26 @@ const double minWindSpeed = 0.0;
 const double maxWindSpeed = 5.0;
 const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
+const double terrainHalfSize = 45.0;
 const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
-const float fogStart = 18.0f;
-const float fogEnd = 42.0f;
+const float fogStart = 52.0f;
+const float fogEnd = 115.0f;
+
+// Zone centers keep the large farm layout explicit and easy to extend.
+const double windZoneX = -22.0;
+const double windZoneZ = -18.0;
+const double solarZoneX = 18.0;
+const double solarZoneZ = -18.0;
+const double batteryZoneX = 29.0;
+const double batteryZoneZ = -7.0;
+const double substationZoneX = 28.0;
+const double substationZoneZ = 13.0;
+const double barnZoneX = 20.0;
+const double barnZoneZ = 27.0;
+const double greenhouseZoneX = -5.0;
+const double greenhouseZoneZ = 25.0;
+const double paddockZoneX = -25.0;
+const double paddockZoneZ = 24.0;
 
 int axes = 1;
 int mode = 1;
@@ -79,22 +96,22 @@ int fogEnabled = 1;
 GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
-double lightHeight = 5;
+double lightHeight = 25;
 int th = 35;
-int ph = 25;
+int ph = 30;
 int fov = 60;
 double asp = 1;
-double dim = 12;
+double dim = 42;
 double bladeAngle = 0;
 double fpX = 0;
 double fpY = 1;
-double fpZ = 12;
+double fpZ = 42;
 int fpYaw = 0;
 double viewTargetX = 0;
 double viewTargetY = 1;
 double viewTargetZ = 0;
-int windowWidth = 800;
-int windowHeight = 600;
+int windowWidth = 1200;
+int windowHeight = 800;
 unsigned int textureGrass = 0;
 unsigned int textureWood = 0;
 unsigned int textureRoof = 0;
@@ -225,18 +242,21 @@ const char* ModeName()
    }
 }
 
-// Return a readable label for the currently selected object group.
+// Return the exact object represented by the active 0-9 inspection key.
 const char* InspectionName()
 {
    switch (inspectionMode)
    {
       case 0: return "Full scene";
-      case 1: return "Turbines";
-      case 2: return "Barn/farmhouse";
-      case 3: return "Greenhouse";
-      case 4: return "Solar panels";
-      case 5: return "Fence and secondary objects";
-      default: return "Battery storage";
+      case 1: return "Wind turbine";
+      case 2: return "Solar panel";
+      case 3: return "Battery unit";
+      case 4: return "Substation";
+      case 5: return "Greenhouse";
+      case 6: return "Barn/control building";
+      case 7: return "Weather station";
+      case 8: return "Sheep";
+      default: return "Farmer";
    }
 }
 
@@ -554,7 +574,7 @@ void drawExpandedTerrain()
 {
    glPushMatrix();
    glTranslated(0, -0.12, 0);
-   glScaled(26, 0.2, 20);
+   glScaled(2 * terrainHalfSize, 0.2, 2 * terrainHalfSize);
    glColor3f(0.24f, 0.46f, 0.20f);
    drawBoxUnit();
    glPopMatrix();
@@ -567,48 +587,35 @@ void drawExpandedTerrain()
       glColor3f(1, 1, 1);
       glBegin(GL_QUADS);
       glNormal3f(0, 1, 0);
-      glTexCoord2f(0, 0);   glVertex3d(-13, -0.019, -10);
-      glTexCoord2f(13, 0);  glVertex3d( 13, -0.019, -10);
-      glTexCoord2f(13, 10); glVertex3d( 13, -0.019,  10);
-      glTexCoord2f(0, 10);  glVertex3d(-13, -0.019,  10);
+      glTexCoord2f(0, 0);   glVertex3d(-terrainHalfSize, -0.019, -terrainHalfSize);
+      glTexCoord2f(30, 0);  glVertex3d( terrainHalfSize, -0.019, -terrainHalfSize);
+      glTexCoord2f(30, 30); glVertex3d( terrainHalfSize, -0.019,  terrainHalfSize);
+      glTexCoord2f(0, 30);  glVertex3d(-terrainHalfSize, -0.019,  terrainHalfSize);
       glEnd();
       glDisable(GL_TEXTURE_2D);
    }
 
-   // Parallel raised rows make the larger terrain read as working farmland.
+   // Crop rows occupy unused corners and reinforce the agricultural purpose.
    glColor3f(0.33f, 0.24f, 0.13f);
-   for (int row = 0; row < 7; ++row)
+   for (int row = 0; row < 10; ++row)
    {
-      drawBox(-9.8 + 0.62 * row, 0.025, -7.8, 0.30, 0.05, 3.2);
-      drawBox( 8.0 + 0.62 * row, 0.025,  7.8, 0.30, 0.05, 3.2);
+      drawBox(-39.0 + 0.75 * row, 0.025, 36.5, 0.34, 0.05, 12.0);
+      drawBox( 32.0 + 0.75 * row, 0.025, -36.5, 0.34, 0.05, 12.0);
    }
 
-   glColor3f(0.34f, 0.55f, 0.25f);
-   glBegin(GL_LINES);
-   glNormal3f(0, 1, 0);
-   for (int i = -12; i <= 12; ++i)
-   {
-      glVertex3d(i, 0, -10);
-      glVertex3d(i, 0, 10);
-   }
-   for (int i = -9; i <= 9; ++i)
-   {
-      glVertex3d(-13, 0, i);
-      glVertex3d(13, 0, i);
-   }
-   glEnd();
+   // A thin drainage border prevents the large ground slab from reading as
+   // an unbounded plane while remaining above the base without z-fighting.
+   glColor3f(0.18f, 0.32f, 0.15f);
+   drawBox(0, 0.015, -44.0, 88.0, 0.03, 0.32);
+   drawBox(0, 0.015,  44.0, 88.0, 0.03, 0.32);
+   drawBox(-44.0, 0.015, 0, 0.32, 0.03, 88.0);
+   drawBox( 44.0, 0.015, 0, 0.32, 0.03, 88.0);
 }
 
-// Draw the textured path through the farm.
-void drawPath()
+// Draw one textured road strip above the grass surface.
+void drawRoadStrip(double x, double z, double length, double width,
+                   double rotation)
 {
-   const double sections[][8] =
-   {
-      {-1.4,  7.0,  1.4,  7.0,  1.1,  3.5, -1.1,  3.5},
-      {-1.1,  3.5,  1.1,  3.5,  2.8,  1.2,  0.8,  1.2},
-      { 0.8,  1.2,  2.8,  1.2,  5.2,  2.8,  3.3,  3.5}
-   };
-
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
@@ -619,17 +626,34 @@ void drawPath()
    else
       glColor3f(0.58f, 0.48f, 0.32f);
 
+   glPushMatrix();
+   glTranslated(x, 0.028, z);
+   glRotated(rotation, 0, 1, 0);
    glBegin(GL_QUADS);
    glNormal3f(0, 1, 0);
-   for (int i = 0; i < 3; ++i)
-   {
-      glTexCoord2f(0, 0); glVertex3d(sections[i][0], 0.015, sections[i][1]);
-      glTexCoord2f(1, 0); glVertex3d(sections[i][2], 0.015, sections[i][3]);
-      glTexCoord2f(1, 2); glVertex3d(sections[i][4], 0.015, sections[i][5]);
-      glTexCoord2f(0, 2); glVertex3d(sections[i][6], 0.015, sections[i][7]);
-   }
+   glTexCoord2f(0, 0);          glVertex3d(-length / 2, 0, -width / 2);
+   glTexCoord2d(length / 3, 0); glVertex3d( length / 2, 0, -width / 2);
+   glTexCoord2d(length / 3, 1); glVertex3d( length / 2, 0,  width / 2);
+   glTexCoord2f(0, 1);          glVertex3d(-length / 2, 0,  width / 2);
    glEnd();
+   glPopMatrix();
    glDisable(GL_TEXTURE_2D);
+}
+
+// Connect all eight scene zones with a central cross-road and short access
+// branches. Roads sit at y=0.028, safely above the grass at y=-0.019.
+void drawPathNetwork()
+{
+   drawRoadStrip(0, 0, 82, 3.2, 0);
+   drawRoadStrip(0, 0, 82, 3.2, 90);
+
+   drawRoadStrip(-22, -9, 18, 2.2, 90);  // Wind field access.
+   drawRoadStrip( 18, -9, 18, 2.2, 90);  // Solar field access.
+   drawRoadStrip( 25, -7, 14, 2.2, 0);   // Battery yard access.
+   drawRoadStrip( 21, 13, 14, 2.2, 0);   // Substation access.
+   drawRoadStrip( 20, 20, 14, 2.2, 90);  // Barn/control building access.
+   drawRoadStrip( -5, 18, 14, 2.2, 90);  // Greenhouse access.
+   drawRoadStrip(-18, 24, 14, 2.2, 0);   // Sheep paddock access.
 }
 
 // Draw one reusable fence section from handmade box geometry.
@@ -669,15 +693,21 @@ void drawFenceSection(double x, double z, double length, double rotation)
    glPopMatrix();
 }
 
-// Place fence sections around the scene boundary.
+// Place functional fencing around the battery yard, substation, greenhouse,
+// and sheep paddock while leaving openings aligned with the access roads.
 void drawFence()
 {
    const FenceSection sections[] =
    {
-      { 0, -6.2, 16,  0},
-      {-8,  0.0, 12, 90},
-      { 8,  0.0, 12, 90},
-      {-4,  6.2,  8,  0}
+      {29, -11, 10,  0}, {29, -3, 10, 0},
+      {24,  -7,  8, 90}, {34, -7, 8, 90},
+      {28,   9, 12,  0}, {28, 17, 12, 0},
+      {22,  13,  8, 90}, {34, 13, 8, 90},
+      {-5, 21, 12,  0}, {-5, 29, 12, 0},
+      {-11, 25, 8, 90}, { 1, 25, 8, 90},
+      {-25, 17, 16, 0}, {-25, 31, 16, 0},
+      {-33, 24, 14, 90}, {-17, 27.5, 7, 90},
+      {-17, 19.5, 5, 90}
    };
 
    const int count = sizeof(sections) / sizeof(sections[0]);
@@ -686,6 +716,91 @@ void drawFence()
       drawFenceSection(sections[i].x, sections[i].z,
                        sections[i].length, sections[i].rotation);
    }
+}
+
+// Draw a small origin-centered rock used beside roads as erosion control.
+void drawRock(double x, double z, double scale)
+{
+   glPushMatrix();
+   glTranslated(x, 0.16 * scale, z);
+   glRotated(17 * x + 11 * z, 0, 1, 0);
+   glScaled(0.55 * scale, 0.32 * scale, 0.42 * scale);
+   glColor3f(0.34f, 0.35f, 0.33f);
+   drawBoxUnit();
+   glPopMatrix();
+}
+
+// Draw a handmade zone sign with a wooden post and colored identification
+// board. Sign colors correspond to energy, utility, or agricultural use.
+void drawZoneSign(double x, double z, float r, float g, float b)
+{
+   glColor3f(0.38f, 0.22f, 0.10f);
+   drawBox(x, 0.65, z, 0.16, 1.3, 0.16);
+   glColor3f(r, g, b);
+   drawBox(x, 1.25, z, 1.5, 0.58, 0.14);
+   glColor3f(0.92f, 0.92f, 0.82f);
+   drawBox(x, 1.25, z + 0.076, 1.12, 0.08, 0.025);
+}
+
+// Reserve and identify the substation zone with a concrete equipment pad,
+// transformer cabinets, and a short line of handmade power poles.
+void drawSubstationArea()
+{
+   glColor3f(0.38f, 0.39f, 0.40f);
+   drawBox(substationZoneX, 0.08, substationZoneZ, 9.0, 0.16, 6.0);
+
+   glColor3f(0.26f, 0.31f, 0.34f);
+   drawBox(substationZoneX - 2.0, 0.75, substationZoneZ, 1.8, 1.35, 1.4);
+   drawBox(substationZoneX + 0.4, 0.75, substationZoneZ, 1.8, 1.35, 1.4);
+
+   for (int pole = 0; pole < 3; ++pole)
+   {
+      const double x = 17.0 + 5.0 * pole;
+      glColor3f(0.33f, 0.22f, 0.12f);
+      drawBox(x, 2.5, substationZoneZ + 5.0, 0.24, 5.0, 0.24);
+      drawBox(x, 4.55, substationZoneZ + 5.0, 2.3, 0.18, 0.18);
+   }
+
+   glDisable(GL_LIGHTING);
+   glColor3f(0.10f, 0.10f, 0.10f);
+   glBegin(GL_LINES);
+   for (int wire = -1; wire <= 1; ++wire)
+   {
+      const double offset = 0.8 * wire;
+      glVertex3d(17.0 + offset, 4.55, substationZoneZ + 5.0);
+      glVertex3d(22.0 + offset, 4.55, substationZoneZ + 5.0);
+      glVertex3d(22.0 + offset, 4.55, substationZoneZ + 5.0);
+      glVertex3d(27.0 + offset, 4.55, substationZoneZ + 5.0);
+   }
+   glEnd();
+   if (lighting)
+      glEnable(GL_LIGHTING);
+}
+
+// Add only farm-purpose secondary details: zone signs, roadside erosion
+// stones, and water troughs in the reserved sheep paddock.
+void drawFarmDetails()
+{
+   drawZoneSign(-22, -9.2, 0.34f, 0.62f, 0.82f);
+   drawZoneSign( 18, -9.2, 0.18f, 0.34f, 0.62f);
+   drawZoneSign( 24, -7.0, 0.82f, 0.64f, 0.12f);
+   drawZoneSign( 21, 13.0, 0.78f, 0.32f, 0.18f);
+   drawZoneSign( 20, 20.0, 0.62f, 0.24f, 0.18f);
+   drawZoneSign( -5, 18.0, 0.24f, 0.62f, 0.42f);
+   drawZoneSign(-18, 24.0, 0.78f, 0.78f, 0.68f);
+
+   for (int i = -3; i <= 3; ++i)
+   {
+      drawRock(-7.0 + 5.0 * i, -2.1, 0.75 + 0.08 * (i & 1));
+      drawRock( 2.1, -7.0 + 5.0 * i, 0.68 + 0.07 * ((i + 1) & 1));
+   }
+
+   glColor3f(0.25f, 0.34f, 0.38f);
+   drawBox(paddockZoneX - 3.0, 0.28, paddockZoneZ + 2.0,
+           3.0, 0.45, 0.85);
+   glColor3f(0.20f, 0.46f, 0.68f);
+   drawBox(paddockZoneX - 3.0, 0.52, paddockZoneZ + 2.0,
+           2.65, 0.08, 0.58);
 }
 
 // Draw a handmade gable roof with explicitly calculated slope normals.
@@ -1018,6 +1133,96 @@ void drawBatteryStorage()
    glPopMatrix();
 }
 
+// Draw an origin-centered weather station from a mast, instrument enclosure,
+// wind vane, anemometer arms, and three handmade cup blocks.
+void drawWeatherStation()
+{
+   glColor3f(0.48f, 0.52f, 0.54f);
+   drawBox(0, 1.7, 0, 0.16, 3.4, 0.16);
+   drawBox(0, 0.65, 0, 0.85, 0.58, 0.52);
+   drawBox(0, 3.15, 0, 2.0, 0.10, 0.10);
+   drawBox(0, 3.38, 0, 0.10, 0.48, 0.10);
+
+   glColor3f(0.82f, 0.30f, 0.14f);
+   drawBox(0.72, 3.15, 0, 0.45, 0.26, 0.08);
+   glColor3f(0.72f, 0.76f, 0.78f);
+   for (int cup = 0; cup < 3; ++cup)
+   {
+      glPushMatrix();
+      glRotated(120 * cup, 0, 1, 0);
+      drawBox(0.62, 3.62, 0, 1.15, 0.08, 0.08);
+      drawBox(1.15, 3.62, 0.12, 0.22, 0.28, 0.24);
+      glPopMatrix();
+   }
+}
+
+// Draw one origin-centered low-poly sheep using only transformed handmade
+// boxes. The broad white body, dark face, ears, and four legs stay readable
+// from inspection distance and can be replaced with richer geometry later.
+void drawSheep()
+{
+   glColor3f(0.88f, 0.86f, 0.78f);
+   drawBox(0, 0.95, 0, 1.65, 0.95, 0.90);
+   glColor3f(0.24f, 0.22f, 0.20f);
+   drawBox(0, 1.03, 0.62, 0.62, 0.68, 0.50);
+   drawBox(-0.43, 1.18, 0.65, 0.35, 0.12, 0.18);
+   drawBox( 0.43, 1.18, 0.65, 0.35, 0.12, 0.18);
+
+   for (int side = -1; side <= 1; side += 2)
+   {
+      drawBox(0.55 * side, 0.38, -0.27, 0.18, 0.76, 0.18);
+      drawBox(0.55 * side, 0.38,  0.27, 0.18, 0.76, 0.18);
+   }
+}
+
+// Draw one origin-centered farmer with a hat, head, torso, arms, and legs.
+void drawFarmer()
+{
+   glColor3f(0.78f, 0.58f, 0.42f);
+   drawBox(0, 2.35, 0, 0.58, 0.58, 0.52);
+   glColor3f(0.72f, 0.52f, 0.18f);
+   drawBox(0, 2.70, 0, 1.05, 0.12, 0.78);
+   drawBox(0, 2.86, 0, 0.62, 0.28, 0.55);
+
+   glColor3f(0.22f, 0.42f, 0.66f);
+   drawBox(0, 1.55, 0, 0.78, 1.05, 0.46);
+   drawBox(-0.58, 1.58, 0, 0.22, 1.05, 0.22);
+   drawBox( 0.58, 1.58, 0, 0.22, 1.05, 0.22);
+   glColor3f(0.20f, 0.24f, 0.28f);
+   drawBox(-0.22, 0.55, 0, 0.27, 1.10, 0.30);
+   drawBox( 0.22, 0.55, 0, 0.27, 1.10, 0.30);
+}
+
+// Place the weather station and farm figures in their functional full-scene
+// locations. Inspection mode draws the same models directly at the origin.
+void drawFarmCharactersAndInstruments()
+{
+   glPushMatrix();
+   glTranslated(-10.0, 0, -8.0);
+   drawWeatherStation();
+   glPopMatrix();
+
+   const double sheepPositions[][3] =
+   {
+      {-27.5, 0, 22.0}, {-23.5, 0, 25.5}, {-28.0, 0, 27.0}
+   };
+   for (int i = 0; i < 3; ++i)
+   {
+      glPushMatrix();
+      glTranslated(sheepPositions[i][0], sheepPositions[i][1],
+                   sheepPositions[i][2]);
+      glRotated(25 * i, 0, 1, 0);
+      drawSheep();
+      glPopMatrix();
+   }
+
+   glPushMatrix();
+   glTranslated(-20.0, 0, 21.0);
+   glRotated(-25, 0, 1, 0);
+   drawFarmer();
+   glPopMatrix();
+}
+
 // Draw one low-poly tree with a box trunk and two eight-sided cone canopies.
 // Cone side normals include both radial and upward components for lighting.
 void drawTree(double x, double z, double scale)
@@ -1068,10 +1273,20 @@ void drawTree(double x, double z, double scale)
 // Place a small number of trees around the boundary without obscuring turbines.
 void drawTreeGroup()
 {
-   drawTree(-6.8, 4.5, 0.85);
-   drawTree(-7.0, 1.8, 0.70);
-   drawTree( 7.0, 0.8, 0.78);
-   drawTree( 6.7, -4.8, 0.68);
+   // Tree lines act as windbreaks near buildings and paddock boundaries.
+   const double treePositions[][3] =
+   {
+      {-39, -28, 1.2}, {-39, -18, 1.0}, {-39, -8, 1.1},
+      {-38,  10, 1.0}, {-38,  20, 1.2}, {-38, 32, 1.0},
+      { -9,  36, 1.1}, {  2,  36, 1.0}, { 13, 36, 1.2},
+      { 28,  36, 1.1}, { 39,  28, 1.0}, { 39,  5, 1.1},
+      { 39, -18, 1.0}, { 28, -39, 1.1}, {  8, -39, 1.0}
+   };
+
+   const int count = sizeof(treePositions) / sizeof(treePositions[0]);
+   for (int i = 0; i < count; ++i)
+      drawTree(treePositions[i][0], treePositions[i][1],
+               treePositions[i][2]);
 }
 
 // Draw all wind turbines using the reusable handmade turbine model.
@@ -1085,20 +1300,29 @@ void drawTurbineGroup()
    };
 
    const int count = sizeof(windmills) / sizeof(windmills[0]);
+   glPushMatrix();
+   glTranslated(windZoneX + 0.6, 0, windZoneZ + 1.9);
    for (int i = 0; i < count; ++i)
       drawWindmillInstance(windmills[i]);
+   glPopMatrix();
 }
 
 // Draw the barn/farmhouse object group.
 void drawBarnGroup()
 {
+   glPushMatrix();
+   glTranslated(barnZoneX - 5.7, 0, barnZoneZ - 3.4);
    drawBarnOrShed();
+   glPopMatrix();
 }
 
 // Draw only the opaque greenhouse base, posts, rails, ridge, and rafters.
 void drawGreenhouseOpaque()
 {
+   glPushMatrix();
+   glTranslated(greenhouseZoneX + 4.2, 0, greenhouseZoneZ - 3.4);
    drawGreenhouseFrame();
+   glPopMatrix();
 }
 
 // Draw transparent greenhouse glass after every opaque object.
@@ -1113,7 +1337,10 @@ void drawGreenhouseTransparent()
    // Keep depth testing enabled so opaque surfaces still occlude the glass.
    // Disable only depth writes so glass does not hide objects behind it.
    glDepthMask(GL_FALSE);
+   glPushMatrix();
+   glTranslated(greenhouseZoneX + 4.2, 0, greenhouseZoneZ - 3.4);
    drawGreenhouseGlassPanels();
+   glPopMatrix();
    glDepthMask(GL_TRUE);
 
    glDisable(GL_BLEND);
@@ -1317,6 +1544,8 @@ void drawWindRibbons()
          glUniform1f(fogEndLocation, fogEnd);
    }
 
+   glPushMatrix();
+   glTranslated(windZoneX, 0, windZoneZ);
    for (int ribbon = 0; ribbon < ribbonCount; ++ribbon)
    {
       const double ribbonPhase = 0.73 * ribbon;
@@ -1344,6 +1573,7 @@ void drawWindRibbons()
       }
       glEnd();
    }
+   glPopMatrix();
 
    // Never allow the ribbon shader to leak into glass, HUD, or later frames.
    glUseProgram(0);
@@ -1359,52 +1589,156 @@ void drawWindRibbons()
 // Draw the complete handmade solar-energy object group.
 void drawSolarGroup()
 {
+   glPushMatrix();
+   glTranslated(solarZoneX - 3.3, 0, solarZoneZ + 0.2);
    drawSolarPanelArray();
+   glPopMatrix();
 }
 
 // Draw environmental and secondary objects used around the energy farm.
 void drawSecondaryObjects()
 {
    drawExpandedTerrain();
-   drawPath();
+   drawPathNetwork();
    drawFence();
    drawTreeGroup();
+   drawSubstationArea();
+   drawFarmDetails();
 }
 
-// Draw every opaque object group in the main farm scene.
-void drawFullSceneOpaque()
+// Draw every opaque group at its zone anchor. The southern half contains the
+// wind, solar, and battery zones; the northern half contains utilities,
+// buildings, greenhouse, and livestock support.
+void drawScene()
 {
    drawSecondaryObjects();
+   drawFarmCharactersAndInstruments();
    drawBarnGroup();
    drawTurbineGroup();
    drawGreenhouseOpaque();
    drawSolarGroup();
+   glPushMatrix();
+   glTranslated(batteryZoneX - 7.2, 0, batteryZoneZ + 1.4);
    drawBatteryStorage();
+   glPopMatrix();
 }
 
-// Dispatch opaque scene rendering according to the active inspection selection.
-void drawInspectedOpaqueObjects()
+// Draw a neutral inspection floor and one-unit grid at y=0. It is intentionally
+// untextured so object textures, materials, silhouette, and scale stay clear.
+void drawInspectionGround()
 {
+   glDisable(GL_TEXTURE_2D);
+   glColor3f(0.24f, 0.26f, 0.27f);
+   drawBox(0, -0.075, 0, 12.0, 0.15, 12.0);
+
+   glDisable(GL_LIGHTING);
+   glColor3f(0.42f, 0.44f, 0.45f);
+   glBegin(GL_LINES);
+   for (int line = -6; line <= 6; ++line)
+   {
+      glVertex3d(line, 0.005, -6);
+      glVertex3d(line, 0.005,  6);
+      glVertex3d(-6, 0.005, line);
+      glVertex3d( 6, 0.005, line);
+   }
+   glEnd();
+   if (lighting)
+      glEnable(GL_LIGHTING);
+}
+
+// Draw a compact origin-centered substation sample for inspection mode.
+void drawInspectionSubstation()
+{
+   glColor3f(0.38f, 0.39f, 0.40f);
+   drawBox(0, 0.08, 0, 5.8, 0.16, 4.2);
+   glColor3f(0.26f, 0.31f, 0.34f);
+   drawBox(-1.25, 0.80, 0, 1.65, 1.45, 1.35);
+   drawBox( 1.25, 0.80, 0, 1.65, 1.45, 1.35);
+   glColor3f(0.62f, 0.64f, 0.64f);
+   drawBox(-2.2, 1.9, -1.2, 0.16, 3.8, 0.16);
+   drawBox( 2.2, 1.9, -1.2, 0.16, 3.8, 0.16);
+   drawBox(0, 3.45, -1.2, 4.7, 0.16, 0.16);
+}
+
+// Draw exactly one major object at the origin for professor-facing inspection.
+// Existing geometry is reused with inverse translations where legacy drawing
+// functions still contain their original local placement transform.
+void drawInspectionObject()
+{
+   drawInspectionGround();
+
    switch (inspectionMode)
    {
-      case 0: drawFullSceneOpaque();  break;
-      case 1: drawTurbineGroup();     break;
-      case 2: drawBarnGroup();        break;
-      case 3: drawGreenhouseOpaque(); break;
-      case 4: drawSolarGroup();       break;
-      case 5: drawSecondaryObjects(); break;
-      case 6: drawBatteryStorage();   break;
+      case 1:
+         glPushMatrix();
+         glScaled(1.35, 1.35, 1.35);
+         drawWindmillUnit(0);
+         glPopMatrix();
+         break;
+      case 2:
+         glColor3f(0.42f, 0.44f, 0.46f);
+         drawBox(-0.72, 0.48, 0, 0.10, 0.96, 0.10);
+         drawBox( 0.72, 0.48, 0, 0.10, 0.96, 0.10);
+         glPushMatrix();
+         glTranslated(0, 1.02, 0);
+         glRotated(-24, 1, 0, 0);
+         drawSolarPanelUnit();
+         glPopMatrix();
+         break;
+      case 3:
+         drawBatteryUnit();
+         break;
+      case 4:
+         drawInspectionSubstation();
+         break;
+      case 5:
+         glPushMatrix();
+         glTranslated(4.2, 0, -3.4);
+         drawGreenhouseFrame();
+         glPopMatrix();
+         break;
+      case 6:
+         glPushMatrix();
+         glTranslated(-5.7, 0, -3.4);
+         drawBarnOrShed();
+         glPopMatrix();
+         break;
+      case 7:
+         drawWeatherStation();
+         break;
+      case 8:
+         glPushMatrix();
+         glScaled(1.5, 1.5, 1.5);
+         drawSheep();
+         glPopMatrix();
+         break;
+      case 9:
+         drawFarmer();
+         break;
    }
 }
 
-// Draw transparent objects after opaque geometry. Wind renders before glass so
-// the greenhouse glazing can tint airflow that visually passes behind it.
-void drawInspectedTransparentObjects()
+// Draw transparent scene content after opaque geometry. Greenhouse inspection
+// uses origin-centered glass while full-scene mode retains world placement.
+void drawTransparentPass()
 {
-   drawWindRibbons();
-
-   if (inspectionMode == 0 || inspectionMode == 3)
+   if (inspectionMode == 0)
+   {
+      drawWindRibbons();
       drawGreenhouseTransparent();
+   }
+   else if (inspectionMode == 5 && glassVisible)
+   {
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glDepthMask(GL_FALSE);
+      glPushMatrix();
+      glTranslated(4.2, 0, -3.4);
+      drawGreenhouseGlassPanels();
+      glPopMatrix();
+      glDepthMask(GL_TRUE);
+      glDisable(GL_BLEND);
+   }
 }
 
 // Draw a visible marker at the moving positional light source.
@@ -1506,12 +1840,17 @@ void display()
    }
 
    ConfigureFog();
+   if (inspectionMode != 0)
+      glDisable(GL_FOG);
 
+   const double lightRadius = inspectionMode == 0 ? 38.0 : 7.0;
+   const double activeLightHeight =
+      inspectionMode == 0 ? lightHeight : 7.0;
    const float lightPosition[] =
    {
-      static_cast<float>(7 * Cos(lightAngle)),
-      static_cast<float>(lightHeight),
-      static_cast<float>(7 * Sin(lightAngle)),
+      static_cast<float>(lightRadius * Cos(lightAngle)),
+      static_cast<float>(activeLightHeight),
+      static_cast<float>(lightRadius * Sin(lightAngle)),
       1.0f
    };
    if (inspectionMode == 0)
@@ -1521,7 +1860,12 @@ void display()
    else
       glDisable(GL_LIGHTING);
 
-   drawInspectedOpaqueObjects();
+   // Mode zero renders the complete expanded farm. Modes one through nine
+   // render exactly one origin-centered object over the neutral inspection grid.
+   if (inspectionMode == 0)
+      drawScene();
+   else
+      drawInspectionObject();
    glDisable(GL_LIGHTING);
    if (axes)
       DrawAxes();
@@ -1532,7 +1876,7 @@ void display()
    // Transparent glass is drawn after all opaque scene geometry so the
    // existing depth buffer can reject hidden fragments without glass writing
    // new depth values that would incorrectly conceal objects behind it.
-   drawInspectedTransparentObjects();
+   drawTransparentPass();
 
    // Fog is a 3D scene effect; disable it before the screen-space HUD and
    // restore it from fogEnabled at the start of the next frame.
@@ -1581,7 +1925,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-6: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
+   DrawText(10, 50, "0-9: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -1605,70 +1949,41 @@ void reshape(int width, int height)
    Project();
 }
 
-// Apply a centered overview preset for the selected inspection group.
+// Apply a centered camera preset for full scene or one origin-centered object.
+// Arrow keys, camera-mode cycling, zoom, and first-person controls remain
+// unchanged after the preset is selected.
 void SetInspectionMode(int selectedMode)
 {
    inspectionMode = selectedMode;
    mode = 1;
 
+   if (inspectionMode == 0)
+   {
+      viewTargetX = 0;
+      viewTargetY = 1;
+      viewTargetZ = 0;
+      th = 35;
+      ph = 30;
+      dim = 42;
+      return;
+   }
+
+   viewTargetX = 0;
+   viewTargetZ = 0;
+   th = 30;
+   ph = 16;
+
    switch (inspectionMode)
    {
-      case 0:
-         viewTargetX = 0;
-         viewTargetY = 1;
-         viewTargetZ = 0;
-         th = 35;
-         ph = 25;
-         dim = 12;
-         break;
-      case 1:
-         viewTargetX = -0.5;
-         viewTargetY = 2.0;
-         viewTargetZ = -1.0;
-         th = 25;
-         ph = 15;
-         dim = 6;
-         break;
-      case 2:
-         viewTargetX = 5.7;
-         viewTargetY = 1.2;
-         viewTargetZ = 3.4;
-         th = 35;
-         ph = 15;
-         dim = 3;
-         break;
-      case 3:
-         viewTargetX = -3.5;
-         viewTargetY = 1.0;
-         viewTargetZ = 3.2;
-         th = 30;
-         ph = 18;
-         dim = 3;
-         break;
-      case 4:
-         viewTargetX = 3.0;
-         viewTargetY = 0.8;
-         viewTargetZ = -1.0;
-         th = 30;
-         ph = 22;
-         dim = 4;
-         break;
-      case 5:
-         viewTargetX = 0;
-         viewTargetY = 0.5;
-         viewTargetZ = 0;
-         th = 35;
-         ph = 30;
-         dim = 12;
-         break;
-      case 6:
-         viewTargetX = 7.2;
-         viewTargetY = 1.0;
-         viewTargetZ = -1.4;
-         th = 30;
-         ph = 16;
-         dim = 3;
-         break;
+      case 1: viewTargetY = 2.2; dim = 5.0; break;
+      case 2: viewTargetY = 0.8; dim = 3.0; break;
+      case 3: viewTargetY = 1.0; dim = 2.8; break;
+      case 4: viewTargetY = 1.4; dim = 4.0; break;
+      case 5: viewTargetY = 1.2; dim = 4.2; break;
+      case 6: viewTargetY = 1.2; dim = 3.6; break;
+      case 7: viewTargetY = 1.8; dim = 4.0; break;
+      case 8: viewTargetY = 0.9; dim = 3.0; break;
+      case 9: viewTargetY = 1.4; dim = 3.4; break;
    }
 }
 
@@ -1679,10 +1994,10 @@ void ResetCamera()
    fov = 60;
    fpX = 0;
    fpY = 1;
-   fpZ = 12;
+   fpZ = 42;
    fpYaw = 0;
    lightAngle = 90;
-   lightHeight = 5;
+   lightHeight = 25;
 }
 
 // Adjust orthographic size or perspective field of view.
@@ -1693,8 +2008,8 @@ void AdjustZoom(int direction)
       dim -= 0.5 * direction;
       if (dim < 3)
          dim = 3;
-      if (dim > 20)
-         dim = 20;
+      if (dim > 80)
+         dim = 80;
    }
    else
    {
@@ -1783,10 +2098,10 @@ void key(unsigned char ch, int, int)
    else if (ch == '>')
    {
       lightHeight += 0.25;
-      if (lightHeight > 12)
-         lightHeight = 12;
+      if (lightHeight > 60)
+         lightHeight = 60;
    }
-   else if (ch >= '0' && ch <= '6')
+   else if (ch >= '0' && ch <= '9')
    {
       SetInspectionMode(ch - '0');
    }
