@@ -698,8 +698,8 @@ void drawFenceSection(double x, double z, double length, double rotation)
    glPopMatrix();
 }
 
-// Place functional fencing around the battery yard, substation, greenhouse,
-// and sheep paddock while leaving openings aligned with the access roads.
+// Place functional fencing around the battery yard, substation, and greenhouse.
+// The sheep enclosure is owned by drawSheepPaddock() with the animated animals.
 void drawFence()
 {
    const FenceSection sections[] =
@@ -707,10 +707,7 @@ void drawFence()
       {29, -11, 10,  0}, {29, -3, 10, 0},
       {24,  -7,  8, 90}, {34, -7, 8, 90},
       {-5, 21, 12,  0}, {-5, 29, 12, 0},
-      {-11, 25, 8, 90}, { 1, 25, 8, 90},
-      {-25, 17, 16, 0}, {-25, 31, 16, 0},
-      {-33, 24, 14, 90}, {-17, 27.5, 7, 90},
-      {-17, 19.5, 5, 90}
+      {-11, 25, 8, 90}, { 1, 25, 8, 90}
    };
 
    const int count = sizeof(sections) / sizeof(sections[0]);
@@ -905,8 +902,7 @@ void drawPowerLines()
       glEnable(GL_LIGHTING);
 }
 
-// Add only farm-purpose secondary details: zone signs, roadside erosion
-// stones, and water troughs in the reserved sheep paddock.
+// Add farm-purpose secondary details: zone signs and roadside erosion stones.
 void drawFarmDetails()
 {
    drawZoneSign(-22, -9.2, 0.34f, 0.62f, 0.82f);
@@ -923,12 +919,6 @@ void drawFarmDetails()
       drawRock( 2.1, -7.0 + 5.0 * i, 0.68 + 0.07 * ((i + 1) & 1));
    }
 
-   glColor3f(0.25f, 0.34f, 0.38f);
-   drawBox(paddockZoneX - 3.0, 0.28, paddockZoneZ + 2.0,
-           3.0, 0.45, 0.85);
-   glColor3f(0.20f, 0.46f, 0.68f);
-   drawBox(paddockZoneX - 3.0, 0.52, paddockZoneZ + 2.0,
-           2.65, 0.08, 0.58);
 }
 
 // Draw a handmade gable roof with explicitly calculated slope normals.
@@ -1577,21 +1567,144 @@ void drawWeatherStation()
 
 // Draw one origin-centered low-poly sheep using only transformed handmade
 // boxes. The broad white body, dark face, ears, and four legs stay readable
-// from inspection distance and can be replaced with richer geometry later.
-void drawSheep()
+// Emit one vertex and its ellipsoid normal for the handmade low-poly body.
+void drawEllipsoidVertex(double latitude, double longitude,
+                         double radiusX, double radiusY, double radiusZ)
 {
-   glColor3f(0.88f, 0.86f, 0.78f);
-   drawBox(0, 0.95, 0, 1.65, 0.95, 0.90);
-   glColor3f(0.24f, 0.22f, 0.20f);
-   drawBox(0, 1.03, 0.62, 0.62, 0.68, 0.50);
-   drawBox(-0.43, 1.18, 0.65, 0.35, 0.12, 0.18);
-   drawBox( 0.43, 1.18, 0.65, 0.35, 0.12, 0.18);
+   const double x = radiusX * Cos(latitude) * Cos(longitude);
+   const double y = radiusY * Sin(latitude);
+   const double z = radiusZ * Cos(latitude) * Sin(longitude);
+   double nx = x / (radiusX * radiusX);
+   double ny = y / (radiusY * radiusY);
+   double nz = z / (radiusZ * radiusZ);
+   const double length = std::sqrt(nx * nx + ny * ny + nz * nz);
+   nx /= length;
+   ny /= length;
+   nz /= length;
+   glNormal3d(nx, ny, nz);
+   glVertex3d(x, y, z);
+}
 
+// Draw a deliberately low-poly handmade ellipsoid without imported geometry.
+void drawLowPolyEllipsoid(double radiusX, double radiusY, double radiusZ)
+{
+   const int slices = 10;
+   const int stacks = 6;
+   for (int stack = 0; stack < stacks; ++stack)
+   {
+      const double latitude0 = -90.0 + 180.0 * stack / stacks;
+      const double latitude1 = -90.0 + 180.0 * (stack + 1) / stacks;
+      glBegin(GL_QUAD_STRIP);
+      for (int slice = 0; slice <= slices; ++slice)
+      {
+         const double longitude = 360.0 * slice / slices;
+         drawEllipsoidVertex(latitude0, longitude,
+                             radiusX, radiusY, radiusZ);
+         drawEllipsoidVertex(latitude1, longitude,
+                             radiusX, radiusY, radiusZ);
+      }
+      glEnd();
+   }
+}
+
+// Draw one origin-centered low-poly sheep. The optional phase offsets the
+// simple periodic gait so paddock animals do not move in lockstep.
+void drawSheep(double phase = 0.0)
+{
+   const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+   const double legSwing = 14.0 * std::sin(2.8 * timeSeconds + phase);
+   const double headBob = 0.035 * std::sin(2.8 * timeSeconds + phase);
+
+   glColor3f(0.90f, 0.88f, 0.80f);
+   glPushMatrix();
+   glTranslated(0, 1.02, 0);
+   drawLowPolyEllipsoid(0.88, 0.52, 0.55);
+   glPopMatrix();
+
+   // Small repeated wool bumps keep the silhouette readable but intentionally
+   // stylized rather than anatomically realistic.
+   for (int bump = -2; bump <= 2; ++bump)
+   {
+      glPushMatrix();
+      glTranslated(0.31 * bump, 1.43 - 0.025 * std::abs(bump), -0.02);
+      drawLowPolyEllipsoid(0.25, 0.19, 0.26);
+      glPopMatrix();
+   }
+
+   glPushMatrix();
+   glTranslated(0, headBob, 0);
+   glColor3f(0.24f, 0.22f, 0.20f);
+   drawBox(0, 1.12, 0.63, 0.58, 0.66, 0.46);
+   drawBox(-0.42, 1.28, 0.65, 0.30, 0.11, 0.18);
+   drawBox( 0.42, 1.28, 0.65, 0.30, 0.11, 0.18);
+   glColor3f(0.08f, 0.07f, 0.06f);
+   drawBox(-0.15, 1.20, 0.875, 0.06, 0.06, 0.025);
+   drawBox( 0.15, 1.20, 0.875, 0.06, 0.06, 0.025);
+   glPopMatrix();
+
+   glColor3f(0.22f, 0.20f, 0.18f);
    for (int side = -1; side <= 1; side += 2)
    {
-      drawBox(0.55 * side, 0.38, -0.27, 0.18, 0.76, 0.18);
-      drawBox(0.55 * side, 0.38,  0.27, 0.18, 0.76, 0.18);
+      for (int end = -1; end <= 1; end += 2)
+      {
+         glPushMatrix();
+         glTranslated(0.55 * side, 0.72, 0.29 * end);
+         glRotated(end * legSwing, 1, 0, 0);
+         drawBox(0, -0.34, 0, 0.17, 0.68, 0.17);
+         glPopMatrix();
+      }
    }
+
+   glColor3f(0.82f, 0.80f, 0.72f);
+   glPushMatrix();
+   glTranslated(0, 1.15, -0.60);
+   glRotated(-28, 1, 0, 0);
+   drawLowPolyEllipsoid(0.18, 0.16, 0.24);
+   glPopMatrix();
+}
+
+// Draw the fenced paddock and five sheep following fixed elliptical paths.
+// This is deterministic path animation only; there is no collision or AI.
+void drawSheepPaddock()
+{
+   glPushMatrix();
+   glTranslated(paddockZoneX, 0, paddockZoneZ);
+
+   drawFenceSection(0, -7, 16, 0);
+   drawFenceSection(0,  7, 16, 0);
+   drawFenceSection(-8, 0, 14, 90);
+   drawFenceSection(8, 3.5, 7, 90);
+   drawFenceSection(8, -4.5, 5, 90);
+
+   // Water trough remains stationary near the fence and outside walking paths.
+   glColor3f(0.25f, 0.34f, 0.38f);
+   drawBox(-6.1, 0.28, 4.9, 2.6, 0.45, 0.85);
+   glColor3f(0.20f, 0.46f, 0.68f);
+   drawBox(-6.1, 0.52, 4.9, 2.25, 0.08, 0.58);
+
+   const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+   for (int sheep = 0; sheep < 5; ++sheep)
+   {
+      const double phase = 72.0 * sheep;
+      const double angle = 12.0 * timeSeconds + phase;
+      const double radiusX = 4.7 - 0.35 * (sheep % 2);
+      const double radiusZ = 4.2 - 0.40 * (sheep % 3);
+      const double x = radiusX * Cos(angle);
+      const double z = radiusZ * Sin(angle);
+      const double dx = -radiusX * Sin(angle);
+      const double dz =  radiusZ * Cos(angle);
+      const double heading =
+         std::atan2(dx, dz) * 180.0 / 3.1415927;
+
+      glPushMatrix();
+      glTranslated(x, 0, z);
+      glRotated(heading, 0, 1, 0);
+      glScaled(0.82, 0.82, 0.82);
+      drawSheep(phase * 3.1415927 / 180.0);
+      glPopMatrix();
+   }
+
+   glPopMatrix();
 }
 
 // Draw one origin-centered farmer with a hat, head, torso, arms, and legs.
@@ -1621,20 +1734,6 @@ void drawFarmCharactersAndInstruments()
    glTranslated(-15.0, 0, -9.0);
    drawWeatherStation();
    glPopMatrix();
-
-   const double sheepPositions[][3] =
-   {
-      {-27.5, 0, 22.0}, {-23.5, 0, 25.5}, {-28.0, 0, 27.0}
-   };
-   for (int i = 0; i < 3; ++i)
-   {
-      glPushMatrix();
-      glTranslated(sheepPositions[i][0], sheepPositions[i][1],
-                   sheepPositions[i][2]);
-      glRotated(25 * i, 0, 1, 0);
-      drawSheep();
-      glPopMatrix();
-   }
 
    glPushMatrix();
    glTranslated(-20.0, 0, 21.0);
@@ -2015,6 +2114,7 @@ void drawScene()
 {
    drawSecondaryObjects();
    drawFarmCharactersAndInstruments();
+   drawSheepPaddock();
    drawBarnGroup();
    drawTurbineField();
    drawGreenhouseOpaque();
