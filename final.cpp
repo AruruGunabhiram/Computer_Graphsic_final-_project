@@ -62,8 +62,8 @@ const double maxWindSpeed = 5.0;
 const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
 const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
-const float fogStart = 14.0f;
-const float fogEnd = 32.0f;
+const float fogStart = 18.0f;
+const float fogEnd = 42.0f;
 
 int axes = 1;
 int mode = 1;
@@ -84,7 +84,7 @@ int th = 35;
 int ph = 25;
 int fov = 60;
 double asp = 1;
-double dim = 9;
+double dim = 12;
 double bladeAngle = 0;
 double fpX = 0;
 double fpY = 1;
@@ -235,7 +235,8 @@ const char* InspectionName()
       case 2: return "Barn/farmhouse";
       case 3: return "Greenhouse";
       case 4: return "Solar panels";
-      default: return "Fence and secondary objects";
+      case 5: return "Fence and secondary objects";
+      default: return "Battery storage";
    }
 }
 
@@ -547,12 +548,13 @@ void drawWindmillInstance(const Instance& instance)
    glPopMatrix();
 }
 
-// Draw the solid ground base, grass texture, and subtle guide grid.
-void drawGround()
+// Draw the expanded terrain around the origin, including the textured grass
+// surface, a low soil foundation, and handmade crop rows at the outer edges.
+void drawExpandedTerrain()
 {
    glPushMatrix();
    glTranslated(0, -0.12, 0);
-   glScaled(18, 0.2, 14);
+   glScaled(26, 0.2, 20);
    glColor3f(0.24f, 0.46f, 0.20f);
    drawBoxUnit();
    glPopMatrix();
@@ -565,26 +567,34 @@ void drawGround()
       glColor3f(1, 1, 1);
       glBegin(GL_QUADS);
       glNormal3f(0, 1, 0);
-      glTexCoord2f(0, 0); glVertex3d(-9, -0.019, -7);
-      glTexCoord2f(9, 0); glVertex3d( 9, -0.019, -7);
-      glTexCoord2f(9, 7); glVertex3d( 9, -0.019,  7);
-      glTexCoord2f(0, 7); glVertex3d(-9, -0.019,  7);
+      glTexCoord2f(0, 0);   glVertex3d(-13, -0.019, -10);
+      glTexCoord2f(13, 0);  glVertex3d( 13, -0.019, -10);
+      glTexCoord2f(13, 10); glVertex3d( 13, -0.019,  10);
+      glTexCoord2f(0, 10);  glVertex3d(-13, -0.019,  10);
       glEnd();
       glDisable(GL_TEXTURE_2D);
+   }
+
+   // Parallel raised rows make the larger terrain read as working farmland.
+   glColor3f(0.33f, 0.24f, 0.13f);
+   for (int row = 0; row < 7; ++row)
+   {
+      drawBox(-9.8 + 0.62 * row, 0.025, -7.8, 0.30, 0.05, 3.2);
+      drawBox( 8.0 + 0.62 * row, 0.025,  7.8, 0.30, 0.05, 3.2);
    }
 
    glColor3f(0.34f, 0.55f, 0.25f);
    glBegin(GL_LINES);
    glNormal3f(0, 1, 0);
-   for (int i = -8; i <= 8; ++i)
+   for (int i = -12; i <= 12; ++i)
    {
-      glVertex3d(i, 0, -7);
-      glVertex3d(i, 0, 7);
+      glVertex3d(i, 0, -10);
+      glVertex3d(i, 0, 10);
    }
-   for (int i = -7; i <= 7; ++i)
+   for (int i = -9; i <= 9; ++i)
    {
-      glVertex3d(-9, 0, i);
-      glVertex3d(9, 0, i);
+      glVertex3d(-13, 0, i);
+      glVertex3d(13, 0, i);
    }
    glEnd();
 }
@@ -946,6 +956,68 @@ void drawSolarPanelArray()
    glPopMatrix();
 }
 
+// Draw one origin-centered battery cabinet with a concrete plinth, enclosure,
+// front doors, cooling vents, status lamps, and a top cable housing.
+void drawBatteryUnit()
+{
+   const float cabinetSpecular[] = {0.32f, 0.34f, 0.36f, 1.0f};
+   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, cabinetSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+
+   glColor3f(0.42f, 0.43f, 0.44f);
+   drawBox(0, 0.10, 0, 1.45, 0.20, 1.05);
+
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureMetal);
+   }
+   glColor3f(0.76f, 0.80f, 0.78f);
+   drawBox(0, 1.05, 0, 1.25, 1.75, 0.88);
+
+   glColor3f(0.23f, 0.27f, 0.28f);
+   drawBox(-0.31, 1.05, 0.451, 0.56, 1.55, 0.035);
+   drawBox( 0.31, 1.05, 0.451, 0.56, 1.55, 0.035);
+   drawBox(0, 1.97, 0, 0.72, 0.16, 0.52);
+   glDisable(GL_TEXTURE_2D);
+
+   // Thin raised slats provide readable cooling vents without external models.
+   glColor3f(0.08f, 0.10f, 0.11f);
+   for (int vent = 0; vent < 5; ++vent)
+   {
+      const double y = 0.58 + 0.13 * vent;
+      drawBox(-0.31, y, 0.474, 0.38, 0.035, 0.025);
+      drawBox( 0.31, y, 0.474, 0.38, 0.035, 0.025);
+   }
+
+   glColor3f(0.88f, 0.72f, 0.12f);
+   drawBox(-0.08, 1.55, 0.476, 0.08, 0.08, 0.025);
+   glColor3f(0.16f, 0.82f, 0.28f);
+   drawBox( 0.08, 1.55, 0.476, 0.08, 0.08, 0.025);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+}
+
+// Place a compact row of battery cabinets beside the photovoltaic array.
+void drawBatteryStorage()
+{
+   glPushMatrix();
+   glTranslated(7.2, 0, -1.4);
+   glRotated(-12, 0, 1, 0);
+   for (int unit = 0; unit < 3; ++unit)
+   {
+      glPushMatrix();
+      glTranslated(1.55 * (unit - 1), 0, 0);
+      drawBatteryUnit();
+      glPopMatrix();
+   }
+   glPopMatrix();
+}
+
 // Draw one low-poly tree with a box trunk and two eight-sided cone canopies.
 // Cone side normals include both radial and upward components for lighting.
 void drawTree(double x, double z, double scale)
@@ -1293,7 +1365,7 @@ void drawSolarGroup()
 // Draw environmental and secondary objects used around the energy farm.
 void drawSecondaryObjects()
 {
-   drawGround();
+   drawExpandedTerrain();
    drawPath();
    drawFence();
    drawTreeGroup();
@@ -1307,6 +1379,7 @@ void drawFullSceneOpaque()
    drawTurbineGroup();
    drawGreenhouseOpaque();
    drawSolarGroup();
+   drawBatteryStorage();
 }
 
 // Dispatch opaque scene rendering according to the active inspection selection.
@@ -1320,6 +1393,7 @@ void drawInspectedOpaqueObjects()
       case 3: drawGreenhouseOpaque(); break;
       case 4: drawSolarGroup();       break;
       case 5: drawSecondaryObjects(); break;
+      case 6: drawBatteryStorage();   break;
    }
 }
 
@@ -1507,7 +1581,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
+   DrawText(10, 50, "0-6: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -1545,7 +1619,7 @@ void SetInspectionMode(int selectedMode)
          viewTargetZ = 0;
          th = 35;
          ph = 25;
-         dim = 9;
+         dim = 12;
          break;
       case 1:
          viewTargetX = -0.5;
@@ -1585,7 +1659,15 @@ void SetInspectionMode(int selectedMode)
          viewTargetZ = 0;
          th = 35;
          ph = 30;
-         dim = 9;
+         dim = 12;
+         break;
+      case 6:
+         viewTargetX = 7.2;
+         viewTargetY = 1.0;
+         viewTargetZ = -1.4;
+         th = 30;
+         ph = 16;
+         dim = 3;
          break;
    }
 }
@@ -1704,7 +1786,7 @@ void key(unsigned char ch, int, int)
       if (lightHeight > 12)
          lightHeight = 12;
    }
-   else if (ch >= '0' && ch <= '5')
+   else if (ch >= '0' && ch <= '6')
    {
       SetInspectionMode(ch - '0');
    }

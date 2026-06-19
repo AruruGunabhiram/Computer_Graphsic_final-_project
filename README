@@ -8,8 +8,8 @@ Project Summary
 ---------------
 This interactive OpenGL scene presents a renewable-energy farm containing
 three animated wind turbines, a barn, a transparent greenhouse, a solar-panel
-array, trees, fencing, a path, and textured terrain. The default perspective
-view shows the complete scene immediately with lighting, textures, fog,
+array, battery-storage cabinets, trees, fencing, a path, and expanded textured
+terrain. The default perspective view shows the complete scene immediately with lighting, textures, fog,
 greenhouse glass, wind ribbons, turbine animation, and the moving light
 enabled.
 
@@ -38,6 +38,7 @@ Controls
     3                 Inspect greenhouse
     4                 Inspect solar-panel array
     5                 Inspect fence and secondary objects
+    6                 Inspect battery-storage cabinets
     Arrow keys        Rotate overview camera; turn/move in first person
     PageUp/PageDown   Zoom in/out or decrease/increase field of view
     + or =            Zoom in / decrease field of view
@@ -60,7 +61,7 @@ Controls
 Feature List
 ------------
 - Handmade reusable geometry for turbines, buildings, greenhouse framing,
-  solar panels, trees, fences, terrain, and paths
+  solar panels, battery cabinets, trees, fences, expanded terrain, and paths
 - Three instanced turbines with frame-rate-independent rotor animation
 - Shared interactive wind speed from 0.0 to 5.0
 - Twelve translucent wind-flow ribbons animated by GLSL
@@ -119,6 +120,8 @@ New Work Added for the Final Project
 ------------------------------------
 - Greenhouse frame and separately rendered transparent glazing
 - Angled photovoltaic array with handmade supports
+- Expanded terrain with outer crop rows and revised full-scene framing
+- Three handmade battery-storage cabinets with vents and status indicators
 - Low-poly trees and expanded secondary scenery
 - Object-inspection modes with centered camera presets
 - Shared wind-speed model and frame-rate-independent turbine motion
