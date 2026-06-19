@@ -1032,16 +1032,46 @@ void drawBarnOrShed()
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Draw the greenhouse base, vertical posts, eave rails, ridge, and roof rafters.
-// Every member is a transformed box, so its six outward normals remain valid.
+// Draw one raised soil bed with a repeated row of simple leafy plants.
+// The row is origin-centered so drawGreenhouse() can place multiple rows.
+void drawPlantRow()
+{
+   glDisable(GL_TEXTURE_2D);
+
+   glColor3f(0.30f, 0.16f, 0.07f);
+   drawBox(0, 0.13, 0, 3.25, 0.24, 0.42);
+
+   for (int plant = -3; plant <= 3; ++plant)
+   {
+      const double x = plant * 0.46;
+
+      glColor3f(0.18f, 0.48f, 0.16f);
+      drawBox(x, 0.39, 0, 0.055, 0.48, 0.055);
+
+      glColor3f(0.28f, 0.68f, 0.22f);
+      glPushMatrix();
+      glTranslated(x - 0.09, 0.48, 0);
+      glScaled(0.17, 0.10, 0.08);
+      glutSolidSphere(1.0, 10, 8);
+      glPopMatrix();
+
+      glPushMatrix();
+      glTranslated(x + 0.09, 0.58, 0);
+      glScaled(0.17, 0.10, 0.08);
+      glutSolidSphere(1.0, 10, 8);
+      glPopMatrix();
+   }
+}
+
+// Draw the greenhouse base, door, vertical posts, rails, ridge, and rafters.
+// All greenhouse helpers are centered around the origin; world placement is
+// applied only by the full-scene caller.
 void drawGreenhouseFrame()
 {
    const double roofAngle = 32.735;
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
    const double frameX[] = {-2.0, 0.0, 2.0};
 
-   glPushMatrix();
-   glTranslated(-4.2, 0, 3.4);
    glColor3f(0.62f, 0.68f, 0.64f);
 
    if (textures)
@@ -1066,6 +1096,14 @@ void drawGreenhouseFrame()
    drawBox(0, 1.55,  1.4, 4.2, 0.12, 0.12);
    drawBox(0, 2.45, 0, 4.2, 0.12, 0.12);
 
+   // Front door frame and handle make the entrance readable through the glass.
+   drawBox(-0.53, 0.78, -1.43, 0.08, 1.42, 0.08);
+   drawBox( 0.53, 0.78, -1.43, 0.08, 1.42, 0.08);
+   drawBox(0, 1.46, -1.43, 1.14, 0.08, 0.08);
+   glColor3f(0.78f, 0.63f, 0.18f);
+   drawBox(0.36, 0.75, -1.49, 0.07, 0.07, 0.07);
+   glColor3f(0.62f, 0.68f, 0.64f);
+
    for (int i = 0; i < 3; ++i)
    {
       glPushMatrix();
@@ -1084,7 +1122,6 @@ void drawGreenhouseFrame()
    }
 
    glDisable(GL_TEXTURE_2D);
-   glPopMatrix();
 }
 
 // Draw the greenhouse wall and roof glass geometry.
@@ -1099,14 +1136,21 @@ void drawGreenhouseGlassPanels()
    glDisable(GL_TEXTURE_2D);
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, glassSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0f);
-   glPushMatrix();
-   glTranslated(-4.2, 0, 3.4);
+   glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
+
+   // Back wall uses two broad panes.
+   drawBox(-1.0, 0.82, 1.405, 1.82, 1.32, 0.035);
+   drawBox( 1.0, 0.82, 1.405, 1.82, 1.32, 0.035);
+
+   // The front wall leaves a centered opening occupied by a glass door.
+   drawBox(-1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
+   drawBox( 1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
+   glColor4f(0.40f, 0.70f, 0.74f, 0.46f);
+   drawBox(0, 0.77, -1.445, 0.96, 1.34, 0.035);
    glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
 
    for (int side = -1; side <= 1; side += 2)
    {
-      drawBox(-1.0, 0.82, 1.405 * side, 1.82, 1.32, 0.035);
-      drawBox( 1.0, 0.82, 1.405 * side, 1.82, 1.32, 0.035);
       drawBox(2.005 * side, 0.82, -0.7, 0.035, 1.32, 1.22);
       drawBox(2.005 * side, 0.82,  0.7, 0.035, 1.32, 1.22);
    }
@@ -1128,9 +1172,42 @@ void drawGreenhouseGlassPanels()
       glPopMatrix();
    }
 
-   glPopMatrix();
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+}
+
+// Draw the origin-centered greenhouse in one of two explicit render passes.
+// Pass 1 (glassPass=false) draws only opaque frame, door hardware, soil, and
+// plants. Pass 2 is called after all opaque scene geometry and draws only glass.
+// Depth testing stays enabled in pass 2, but depth writes are temporarily
+// disabled so transparent panes do not conceal plants or scenery behind them.
+void drawGreenhouse(bool glassPass = false)
+{
+   if (!glassPass)
+   {
+      drawGreenhouseFrame();
+
+      glPushMatrix();
+      glTranslated(0, 0, -0.55);
+      drawPlantRow();
+      glPopMatrix();
+
+      glPushMatrix();
+      glTranslated(0, 0, 0.55);
+      drawPlantRow();
+      glPopMatrix();
+      return;
+   }
+
+   if (!glassVisible)
+      return;
+
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glDepthMask(GL_FALSE);
+   drawGreenhouseGlassPanels();
+   glDepthMask(GL_TRUE);
+   glDisable(GL_BLEND);
 }
 
 // Draw one complete origin-centered solar-panel assembly. All components use
@@ -1532,30 +1609,19 @@ void drawBarnGroup()
 void drawGreenhouseOpaque()
 {
    glPushMatrix();
-   glTranslated(greenhouseZoneX + 4.2, 0, greenhouseZoneZ - 3.4);
-   drawGreenhouseFrame();
+   glTranslated(greenhouseZoneX, 0, greenhouseZoneZ);
+   drawGreenhouse();
    glPopMatrix();
 }
 
-// Draw transparent greenhouse glass after every opaque object.
+// Draw transparent greenhouse glass after every opaque object. The blending
+// and depth-write state is localized inside drawGreenhouse(true).
 void drawGreenhouseTransparent()
 {
-   if (!glassVisible)
-      return;
-
-   glEnable(GL_BLEND);
-   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-   // Keep depth testing enabled so opaque surfaces still occlude the glass.
-   // Disable only depth writes so glass does not hide objects behind it.
-   glDepthMask(GL_FALSE);
    glPushMatrix();
-   glTranslated(greenhouseZoneX + 4.2, 0, greenhouseZoneZ - 3.4);
-   drawGreenhouseGlassPanels();
+   glTranslated(greenhouseZoneX, 0, greenhouseZoneZ);
+   drawGreenhouse(true);
    glPopMatrix();
-   glDepthMask(GL_TRUE);
-
-   glDisable(GL_BLEND);
 }
 
 // -----------------------------------------------------------------------------
@@ -1875,10 +1941,7 @@ void drawInspectionObject()
          drawSubstation();
          break;
       case 5:
-         glPushMatrix();
-         glTranslated(4.2, 0, -3.4);
-         drawGreenhouseFrame();
-         glPopMatrix();
+         drawGreenhouse();
          break;
       case 6:
          glPushMatrix();
@@ -1911,17 +1974,7 @@ void drawTransparentPass()
       drawGreenhouseTransparent();
    }
    else if (inspectionMode == 5 && glassVisible)
-   {
-      glEnable(GL_BLEND);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-      glDepthMask(GL_FALSE);
-      glPushMatrix();
-      glTranslated(4.2, 0, -3.4);
-      drawGreenhouseGlassPanels();
-      glPopMatrix();
-      glDepthMask(GL_TRUE);
-      glDisable(GL_BLEND);
-   }
+      drawGreenhouse(true);
 }
 
 // Draw a visible marker at the moving positional light source.
