@@ -1097,8 +1097,9 @@ void drawSolarFarm()
    glPopMatrix();
 }
 
-// Draw one origin-centered battery cabinet with a concrete plinth, enclosure,
-// front doors, cooling vents, status lamps, and a top cable housing.
+// Draw one origin-centered industrial battery container with a concrete
+// plinth, textured metal enclosure, front doors, vents, warning label, status
+// lamps, cable housing, and a side electrical box.
 void drawBatteryUnit()
 {
    const float cabinetSpecular[] = {0.32f, 0.34f, 0.36f, 1.0f};
@@ -1125,6 +1126,12 @@ void drawBatteryUnit()
    drawBox(0, 1.97, 0, 0.72, 0.16, 0.52);
    glDisable(GL_TEXTURE_2D);
 
+   // Raised door seams and handles remain clear at inspection distance.
+   glColor3f(0.08f, 0.09f, 0.10f);
+   drawBox(0, 1.05, 0.473, 0.025, 1.50, 0.018);
+   drawBox(-0.08, 1.12, 0.486, 0.025, 0.22, 0.025);
+   drawBox( 0.08, 1.12, 0.486, 0.025, 0.22, 0.025);
+
    // Thin raised slats provide readable cooling vents without external models.
    glColor3f(0.08f, 0.10f, 0.11f);
    for (int vent = 0; vent < 5; ++vent)
@@ -1139,24 +1146,79 @@ void drawBatteryUnit()
    glColor3f(0.16f, 0.82f, 0.28f);
    drawBox( 0.08, 1.55, 0.476, 0.08, 0.08, 0.025);
 
+   // A raised yellow warning plate and black lightning mark use only handmade
+   // polygons and sit forward of the doors to avoid z-fighting.
+   glColor3f(0.92f, 0.72f, 0.08f);
+   glBegin(GL_TRIANGLES);
+   glNormal3f(0, 0, 1);
+   glVertex3d(-0.16, 1.78, 0.490);
+   glVertex3d( 0.16, 1.78, 0.490);
+   glVertex3d( 0.00, 2.05, 0.490);
+   glEnd();
+   glColor3f(0.08f, 0.08f, 0.07f);
+   glBegin(GL_POLYGON);
+   glNormal3f(0, 0, 1);
+   glVertex3d( 0.02, 1.99, 0.493);
+   glVertex3d(-0.05, 1.87, 0.493);
+   glVertex3d( 0.01, 1.87, 0.493);
+   glVertex3d(-0.02, 1.80, 0.493);
+   glVertex3d( 0.08, 1.91, 0.493);
+   glVertex3d( 0.02, 1.91, 0.493);
+   glEnd();
+
+   // Side-mounted cable box and short conduit identify the electrical output.
+   glColor3f(0.28f, 0.31f, 0.32f);
+   drawBox(0.69, 0.82, 0.05, 0.16, 0.62, 0.48);
+   glColor3f(0.06f, 0.07f, 0.08f);
+   drawBox(0.78, 0.42, 0.05, 0.08, 0.38, 0.12);
+
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Place a compact row of battery cabinets beside the photovoltaic array.
-void drawBatteryStorage()
+// Place four repeated battery containers on a concrete pad inside the existing
+// fenced battery zone. Handmade collection boxes and raised cable conduits
+// visually route their output north toward the substation.
+void drawBatteryYard()
 {
+   glColor3f(0.34f, 0.35f, 0.36f);
+   drawBox(batteryZoneX, 0.06, batteryZoneZ, 8.8, 0.12, 6.6);
+
    glPushMatrix();
-   glTranslated(7.2, 0, -1.4);
-   glRotated(-12, 0, 1, 0);
-   for (int unit = 0; unit < 3; ++unit)
+   glTranslated(batteryZoneX, 0.12, batteryZoneZ);
+   for (int row = 0; row < 2; ++row)
    {
-      glPushMatrix();
-      glTranslated(1.55 * (unit - 1), 0, 0);
-      drawBatteryUnit();
-      glPopMatrix();
+      for (int column = 0; column < 2; ++column)
+      {
+         glPushMatrix();
+         glTranslated((column ? 1.9 : -1.9), 0,
+                      (row ? 1.45 : -1.45));
+         drawBatteryUnit();
+         glPopMatrix();
+      }
    }
    glPopMatrix();
+
+   // Collection boxes receive short branch conduits from both cabinet rows.
+   glColor3f(0.18f, 0.21f, 0.22f);
+   drawBox(batteryZoneX + 3.55, 0.48, batteryZoneZ - 1.45,
+           0.48, 0.84, 0.62);
+   drawBox(batteryZoneX + 3.55, 0.48, batteryZoneZ + 1.45,
+           0.48, 0.84, 0.62);
+   drawBox(batteryZoneX + 2.75, 0.20, batteryZoneZ - 1.45,
+           1.35, 0.12, 0.16);
+   drawBox(batteryZoneX + 2.75, 0.20, batteryZoneZ + 1.45,
+           1.35, 0.12, 0.16);
+
+   // The main conduit exits the battery fence and runs to the south edge of
+   // the substation fence, providing a clear visual connection between zones.
+   glColor3f(0.10f, 0.12f, 0.13f);
+   drawBox(batteryZoneX + 3.55, 0.19, batteryZoneZ,
+           0.18, 0.14, 2.55);
+   drawBox(batteryZoneX + 3.55, 0.19, 3.0,
+           0.18, 0.14, 17.2);
+   drawBox(substationZoneX + 2.25, 0.19, 11.45,
+           4.60, 0.14, 0.18);
 }
 
 // Draw an origin-centered weather station from a mast, instrument enclosure,
@@ -1635,10 +1697,7 @@ void drawScene()
    drawTurbineField();
    drawGreenhouseOpaque();
    drawSolarFarm();
-   glPushMatrix();
-   glTranslated(batteryZoneX - 7.2, 0, batteryZoneZ + 1.4);
-   drawBatteryStorage();
-   glPopMatrix();
+   drawBatteryYard();
 }
 
 // Draw a neutral inspection floor and one-unit grid at y=0. It is intentionally
