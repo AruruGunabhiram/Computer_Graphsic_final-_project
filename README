@@ -53,6 +53,8 @@ Controls
     a                 Toggle coordinate axes
     l                 Toggle lighting
     f or F            Toggle distance fog
+    w or W            Toggle wind-flow ribbons
+    [ or ]            Decrease/increase shared wind speed
     t                 Toggle textures
     g                 Toggle greenhouse glass
     s or S            Toggle animated wind-flow ribbons
@@ -102,7 +104,9 @@ The wind vertex shader displaces ribbon vertices with time- and wind-driven
 sine waves. The fragment shader blends blue and white airflow colors and
 applies the same linear fog model used by fixed-pipeline scene geometry.
 Shader compilation and linking errors are reported without terminating the
-program.
+program. If GLSL is unavailable, the same ribbon geometry is drawn through the
+fixed pipeline with transparent blue coloring. Press `w` to hide or show the
+wind-flow visualization.
 
 Original Graduate Contribution
 ------------------------------

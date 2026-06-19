@@ -2078,13 +2078,13 @@ void drawWindRibbons()
    glDepthMask(GL_FALSE);
 
    const bool useShader = shaderEnabled && windProgram;
+   const double elapsedSeconds =
+      static_cast<double>(glutGet(GLUT_ELAPSED_TIME)) / 1000.0;
    if (useShader)
    {
       glUseProgram(windProgram);
 
       // The same windSpeed that advances turbine blades controls shader travel.
-      const float elapsedSeconds =
-         static_cast<float>(glutGet(GLUT_ELAPSED_TIME)) / 1000.0f;
       const GLint timeLocation = glGetUniformLocation(windProgram, "time");
       const GLint windSpeedLocation =
          glGetUniformLocation(windProgram, "windSpeed");
@@ -2097,7 +2097,7 @@ void drawWindRibbons()
       const GLint fogEndLocation =
          glGetUniformLocation(windProgram, "fogEnd");
       if (timeLocation >= 0)
-         glUniform1f(timeLocation, elapsedSeconds);
+         glUniform1f(timeLocation, static_cast<float>(elapsedSeconds));
       if (windSpeedLocation >= 0)
          glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
       // GLSL does not receive fixed-function fog automatically, so pass the
@@ -2128,10 +2128,15 @@ void drawWindRibbons()
          const double along =
             static_cast<double>(segment) / segmentCount;
          const double x = -8.5 + 17.0 * along;
+         // When GLSL is unavailable, advance the same simple sine phase on the
+         // CPU so [ and ] still change visible airflow animation speed.
+         const double fallbackTravel =
+            useShader ? 0.0 : elapsedSeconds * windSpeed * 2.2;
          const double curve =
-            0.32 * std::sin(0.55 * x + ribbonPhase);
+            0.32 * std::sin(0.55 * x + ribbonPhase - fallbackTravel);
          const double y =
-            centerY + 0.08 * std::sin(0.9 * x + ribbonPhase);
+            centerY +
+            0.08 * std::sin(0.9 * x + ribbonPhase - fallbackTravel);
          const double z = ribbonZ[ribbon] + curve;
 
          glTexCoord2d(along, ribbonPhase);
@@ -2437,7 +2442,7 @@ void display()
                  "Inspection: %s   Lighting: %s   Fog: %s   Glass: %s   Shader: %s   Wind Flow: %s",
                  InspectionName(), lighting ? "on" : "off",
                  fogEnabled ? "On" : "Off", glassVisible ? "on" : "off",
-                 shaderEnabled && windProgram ? "On" : "Off",
+                 windFlowVisible && shaderEnabled && windProgram ? "On" : "Off",
                  windFlowVisible ? "On" : "Off");
 
    const double bladeRpm =
@@ -2456,7 +2461,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-9: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  S: wind flow  [ / ]: wind");
+   DrawText(10, 50, "0-9: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  w: wind ribbons  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -2583,10 +2588,11 @@ void key(unsigned char ch, int, int)
    {
       glassVisible = 1 - glassVisible;
    }
-   else if (ch == 's' || ch == 'S')
+   else if (ch == 'w' || ch == 'W')
    {
+      // Visibility is independent from shader availability. If compilation
+      // failed, turning ribbons on still uses drawWindRibbons()' fixed fallback.
       windFlowVisible = 1 - windFlowVisible;
-      shaderEnabled = windFlowVisible && windProgram;
    }
    else if (ch == 'l' || ch == 'L')
    {
