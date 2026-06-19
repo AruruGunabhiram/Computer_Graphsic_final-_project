@@ -452,15 +452,19 @@ void drawHubUnit()
    glEnd();
 }
 
-// Build the turbine support from a square footing, four tapered tower faces,
-// and a box nacelle. The face normals account for the taper so lighting remains
-// correct, while the rotor is assembled separately from four blades and a hub.
+// Build the turbine support from a square footing, a smooth custom tapered
+// cylinder, and a box nacelle. Per-face normals account for the tower taper so
+// fixed-pipeline lighting remains correct.
 void drawWindmillBaseUnit()
 {
-   const double taper = 0.21 / 2.61;
+   const int towerSides = 16;
+   const double bottomY = 0.24;
+   const double topY = 2.85;
+   const double bottomRadius = 0.35;
+   const double topRadius = 0.14;
+   const double towerHeight = topY - bottomY;
+   const double taper = (bottomRadius - topRadius) / towerHeight;
    const double normalLength = std::sqrt(1.0 + taper * taper);
-   const double normalSide = 1.0 / normalLength;
-   const double normalUp = taper / normalLength;
 
    glPushMatrix();
    glTranslated(0, 0.12, 0);
@@ -469,31 +473,30 @@ void drawWindmillBaseUnit()
    glPopMatrix();
 
    glBegin(GL_QUADS);
-   glNormal3d(0, normalUp, normalSide);
-   glTexCoord2f(0, 0); glVertex3d(-0.35, 0.24,  0.35);
-   glTexCoord2f(1, 0); glVertex3d( 0.35, 0.24,  0.35);
-   glTexCoord2f(1, 3); glVertex3d( 0.14, 2.85,  0.14);
-   glTexCoord2f(0, 3); glVertex3d(-0.14, 2.85,  0.14);
-
-   glNormal3d(0, normalUp, -normalSide);
-   glTexCoord2f(0, 0); glVertex3d( 0.35, 0.24, -0.35);
-   glTexCoord2f(1, 0); glVertex3d(-0.35, 0.24, -0.35);
-   glTexCoord2f(1, 3); glVertex3d(-0.14, 2.85, -0.14);
-   glTexCoord2f(0, 3); glVertex3d( 0.14, 2.85, -0.14);
-
-   glNormal3d(-normalSide, normalUp, 0);
-   glTexCoord2f(0, 0); glVertex3d(-0.35, 0.24, -0.35);
-   glTexCoord2f(1, 0); glVertex3d(-0.35, 0.24,  0.35);
-   glTexCoord2f(1, 3); glVertex3d(-0.14, 2.85,  0.14);
-   glTexCoord2f(0, 3); glVertex3d(-0.14, 2.85, -0.14);
-
-   glNormal3d(normalSide, normalUp, 0);
-   glTexCoord2f(0, 0); glVertex3d(0.35, 0.24,  0.35);
-   glTexCoord2f(1, 0); glVertex3d(0.35, 0.24, -0.35);
-   glTexCoord2f(1, 3); glVertex3d(0.14, 2.85, -0.14);
-   glTexCoord2f(0, 3); glVertex3d(0.14, 2.85,  0.14);
+   for (int side = 0; side < towerSides; ++side)
+   {
+      const double angle0 = 360.0 * side / towerSides;
+      const double angle1 = 360.0 * (side + 1) / towerSides;
+      const double normalAngle = 0.5 * (angle0 + angle1);
+      glNormal3d(Cos(normalAngle) / normalLength,
+                 taper / normalLength,
+                 Sin(normalAngle) / normalLength);
+      glTexCoord2d(static_cast<double>(side) / towerSides, 0);
+      glVertex3d(bottomRadius * Cos(angle0), bottomY,
+                 bottomRadius * Sin(angle0));
+      glTexCoord2d(static_cast<double>(side + 1) / towerSides, 0);
+      glVertex3d(bottomRadius * Cos(angle1), bottomY,
+                 bottomRadius * Sin(angle1));
+      glTexCoord2d(static_cast<double>(side + 1) / towerSides, 3);
+      glVertex3d(topRadius * Cos(angle1), topY,
+                 topRadius * Sin(angle1));
+      glTexCoord2d(static_cast<double>(side) / towerSides, 3);
+      glVertex3d(topRadius * Cos(angle0), topY,
+                 topRadius * Sin(angle0));
+   }
    glEnd();
 
+   // drawBoxUnit supplies outward normals for all six nacelle faces.
    glPushMatrix();
    glTranslated(0, 2.95, 0.08);
    glScaled(0.65, 0.45, 0.85);
@@ -506,7 +509,7 @@ void drawWindmillBaseUnit()
 // -----------------------------------------------------------------------------
 
 // Draw a complete turbine model at the origin for later instancing.
-void drawWindmillUnit(double bladeOffset)
+void drawTurbine(double bladeOffset = 0.0)
 {
    const float turbineSpecular[] = {0.55f, 0.58f, 0.62f, 1.0f};
    const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
@@ -534,10 +537,10 @@ void drawWindmillUnit(double bladeOffset)
       glColor3f(0.92f, 0.84f, 0.58f);
    if (textures)
       glBindTexture(GL_TEXTURE_2D, textureWood);
-   for (int blade = 0; blade < 4; ++blade)
+   for (int blade = 0; blade < 3; ++blade)
    {
       glPushMatrix();
-      glRotated(90 * blade, 0, 0, 1);
+      glRotated(120 * blade, 0, 0, 1);
       drawBladeUnit();
       glPopMatrix();
    }
@@ -564,7 +567,7 @@ void drawWindmillInstance(const Instance& instance)
    glRotated(instance.rotation, 0, 1, 0);
    glScaled(instance.sx, instance.sy, instance.sz);
    glColor3f(instance.r, instance.g, instance.b);
-   drawWindmillUnit(instance.bladeAngle);
+   drawTurbine(instance.bladeAngle);
    glPopMatrix();
 }
 
@@ -1289,8 +1292,9 @@ void drawTreeGroup()
                treePositions[i][2]);
 }
 
-// Draw all wind turbines using the reusable handmade turbine model.
-void drawTurbineGroup()
+// Draw the wind-turbine field by transforming repeated instances of the same
+// origin-centered geometry.
+void drawTurbineField()
 {
    const Instance windmills[] =
    {
@@ -1614,7 +1618,7 @@ void drawScene()
    drawSecondaryObjects();
    drawFarmCharactersAndInstruments();
    drawBarnGroup();
-   drawTurbineGroup();
+   drawTurbineField();
    drawGreenhouseOpaque();
    drawSolarGroup();
    glPushMatrix();
@@ -1672,7 +1676,7 @@ void drawInspectionObject()
       case 1:
          glPushMatrix();
          glScaled(1.35, 1.35, 1.35);
-         drawWindmillUnit(0);
+         drawTurbine();
          glPopMatrix();
          break;
       case 2:
