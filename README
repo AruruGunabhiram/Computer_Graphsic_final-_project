@@ -28,7 +28,8 @@ fixed-pipeline OpenGL alpha blending. The frame and all other opaque scene
 objects are drawn first. The glass is drawn last with depth testing still
 enabled but depth writes temporarily disabled, so objects behind the glass
 remain visible without the glass breaking normal hidden-surface removal.
-Shaders, wind-flow visualization, and fog will be implemented in later phases.
+Portable shader loading infrastructure is included for the future wind
+visualization. Wind ribbons and fog will be implemented in later phases.
 
 Build Instructions
 ------------------
@@ -41,9 +42,15 @@ On Linux or macOS:
 The Makefile compiles with:
     g++ -std=c++11 -Wall -Wextra
 
+GLEW is optional rather than required. On Linux systems configured to use it:
+    make USEGLEW=1
+
 Run Instructions
 ----------------
     ./final
+
+The files wind.vert and wind.frag must remain in the project directory when
+the program runs.
 
 Controls
 --------
@@ -64,6 +71,7 @@ a                 Toggle axes
 l                 Toggle lighting
 t                 Toggle textures
 g                 Toggle greenhouse glass visibility
+S                 Toggle future wind shader state
 Space             Pause/resume automatic light movement
 , and .           Move the light angle manually
 [ and ]           Decrease/increase wind speed
@@ -76,6 +84,9 @@ The program starts in a perspective overview with lighting, textures, depth
 testing, moving light, and turbine animation enabled.
 Greenhouse glass is visible and transparent by default.
 Wind speed starts at 1.0 and can be adjusted from 0.0 through 5.0.
+The wind shader is enabled by default when it compiles and links successfully.
+If GLSL is unsupported or either shader file fails to load, compile, or link,
+the program reports the error and continues in shader-off mode.
 
 Code Reuse and Project Phases
 -----------------------------
@@ -112,7 +123,16 @@ Phase 3 wind-speed changes include:
 - [ and ] wind-speed controls and remapped < and > light-height controls
 - HUD display of wind speed, turbine RPM, and blade pause state
 
-No GLSL shader, GLEW dependency, or fog is included yet.
+Phase 4 shader infrastructure includes:
+- portable text-file loading, shader compilation, and program linking
+- compile and link error logs with non-fatal shader-off fallback
+- wind.vert and wind.frag with time and windSpeed uniforms
+- optional USEGLEW build support without an unconditional GLEW dependency
+- GL_GLEXT_PROTOTYPES on non-Apple builds that do not use GLEW
+- S shader toggle and HUD loaded/failed status
+- fixed-pipeline scene rendering remains unchanged and no wind ribbons are drawn
+
+No wind ribbons or fog are included yet.
 
 Textures
 --------
@@ -126,5 +146,5 @@ Only textures currently used by the program are included:
 Known Limitations
 -----------------
 - Greenhouse glass uses fixed-pipeline blending; no GLSL effects are applied.
-- Texture and shader-ready asset paths are relative, so run ./final from the
-  project directory.
+- Texture and shader paths are relative, so run ./final from the project
+  directory.

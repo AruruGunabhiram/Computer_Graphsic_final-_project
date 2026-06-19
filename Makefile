@@ -6,9 +6,13 @@ SOURCES  := final.cpp
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Darwin)
-	LDLIBS := -framework OpenGL -framework GLUT
+LDLIBS := -framework OpenGL -framework GLUT
 else
-	LDLIBS := -lglut -lGLU -lGL -lm
+LDLIBS := -lglut -lGLU -lGL -lm
+ifeq ($(USEGLEW),1)
+CXXFLAGS += -DUSEGLEW
+LDLIBS += -lGLEW
+endif
 endif
 
 .PHONY: all clean

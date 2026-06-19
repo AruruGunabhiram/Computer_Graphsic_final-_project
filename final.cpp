@@ -3,20 +3,29 @@
  * Gunabhiram Aruru
  *
  * Shader-Based Renewable Energy Farm Visualization
- * Phase 3 preserves the textured renewable-energy scene and adds an
- * interactive wind-speed model for turbine blade animation.
+ * Phase 4 preserves fixed-pipeline rendering and adds portable GLSL loading
+ * infrastructure for a future wind visualization.
  */
 
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #include <GLUT/glut.h>
 #else
+#ifdef USEGLEW
+#include <GL/glew.h>
+#else
+#define GL_GLEXT_PROTOTYPES
+#endif
 #include <GL/glut.h>
 #endif
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <vector>
 
 #define Cos(x) std::cos((x) * 3.1415927 / 180.0)
 #define Sin(x) std::sin((x) * 3.1415927 / 180.0)
@@ -52,6 +61,8 @@ int lighting = 1;      // Toggle lighting on/off
 int textures = 1;      // Toggle textures on/off
 int glassVisible = 1;  // Toggle transparent greenhouse glazing
 int moveLight = 1;     // Pause/resume moving light
+int shaderEnabled = 1; // Future wind shader toggle; fixed scene stays unshaded
+GLuint windProgram = 0;
 double windSpeed = 1.0;
 double lightAngle = 90;
 double lightHeight = 5;
@@ -80,6 +91,141 @@ const double minWindSpeed = 0.0;
 const double maxWindSpeed = 5.0;
 const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
+
+// Read an entire GLSL source file. Missing files are non-fatal.
+bool ReadTextFile(const char* file, std::string& text)
+{
+   std::ifstream input(file);
+   if (!input)
+   {
+      std::fprintf(stderr, "Shader error: cannot open %s\n", file);
+      return false;
+   }
+
+   text.assign(std::istreambuf_iterator<char>(input),
+               std::istreambuf_iterator<char>());
+   if (!input.good() && !input.eof())
+   {
+      std::fprintf(stderr, "Shader error: cannot read %s\n", file);
+      text.clear();
+      return false;
+   }
+   return true;
+}
+
+// Print a shader compiler log when compilation fails.
+void PrintShaderLog(GLuint shader, const char* file)
+{
+   GLint length = 0;
+   glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+   if (length <= 1)
+      return;
+
+   std::vector<GLchar> log(length);
+   glGetShaderInfoLog(shader, length, 0, &log[0]);
+   std::fprintf(stderr, "Shader compile log (%s):\n%s\n", file, &log[0]);
+}
+
+// Print a program linker log when linking fails.
+void PrintProgramLog(GLuint program)
+{
+   GLint length = 0;
+   glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+   if (length <= 1)
+      return;
+
+   std::vector<GLchar> log(length);
+   glGetProgramInfoLog(program, length, 0, &log[0]);
+   std::fprintf(stderr, "Shader link log:\n%s\n", &log[0]);
+}
+
+// Compile one shader stage and return zero instead of terminating on failure.
+GLuint CompileShader(GLenum type, const char* file)
+{
+   std::string source;
+   if (!ReadTextFile(file, source))
+      return 0;
+
+   const GLchar* sourcePointer = source.c_str();
+   const GLuint shader = glCreateShader(type);
+   if (!shader)
+   {
+      std::fprintf(stderr, "Shader error: glCreateShader failed for %s\n", file);
+      return 0;
+   }
+
+   glShaderSource(shader, 1, &sourcePointer, 0);
+   glCompileShader(shader);
+
+   GLint compiled = GL_FALSE;
+   glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+   if (!compiled)
+   {
+      PrintShaderLog(shader, file);
+      glDeleteShader(shader);
+      return 0;
+   }
+   return shader;
+}
+
+// Compile and link the future wind shader, returning zero on any failure.
+GLuint CreateShaderProgram(const char* vertexFile, const char* fragmentFile)
+{
+   const GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexFile);
+   if (!vertexShader)
+      return 0;
+
+   const GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentFile);
+   if (!fragmentShader)
+   {
+      glDeleteShader(vertexShader);
+      return 0;
+   }
+
+   const GLuint program = glCreateProgram();
+   if (!program)
+   {
+      std::fprintf(stderr, "Shader error: glCreateProgram failed\n");
+      glDeleteShader(vertexShader);
+      glDeleteShader(fragmentShader);
+      return 0;
+   }
+
+   glAttachShader(program, vertexShader);
+   glAttachShader(program, fragmentShader);
+   glLinkProgram(program);
+
+   GLint linked = GL_FALSE;
+   glGetProgramiv(program, GL_LINK_STATUS, &linked);
+   glDetachShader(program, vertexShader);
+   glDetachShader(program, fragmentShader);
+   glDeleteShader(vertexShader);
+   glDeleteShader(fragmentShader);
+
+   if (!linked)
+   {
+      PrintProgramLog(program);
+      glDeleteProgram(program);
+      return 0;
+   }
+   return program;
+}
+
+// Safely verify uniform access without drawing or shading the existing scene.
+void CheckWindShader()
+{
+   if (!shaderEnabled || !windProgram)
+      return;
+
+   glUseProgram(windProgram);
+   const GLint timeLocation = glGetUniformLocation(windProgram, "time");
+   const GLint windSpeedLocation = glGetUniformLocation(windProgram, "windSpeed");
+   if (timeLocation >= 0)
+      glUniform1f(timeLocation, 0.0f);
+   if (windSpeedLocation >= 0)
+      glUniform1f(windSpeedLocation, static_cast<float>(windSpeed));
+   glUseProgram(0);
+}
 
 // Reverse byte order when reading a BMP created on opposite-endian hardware.
 void Reverse(void* value, int bytes)
@@ -1149,11 +1295,13 @@ void display()
                  lightAngle, lightHeight, moveLight ? "running" : "paused",
                  lighting ? "on" : "off");
 
-   char stateText[160];
+   char stateText[200];
    std::snprintf(stateText, sizeof(stateText),
-                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s",
+                 "Inspection: %s   Lighting: %s   Textures: %s   Glass: %s   Shader: %s   Load: %s",
                  InspectionName(), lighting ? "on" : "off",
-                 textures ? "on" : "off", glassVisible ? "on" : "off");
+                 textures ? "on" : "off", glassVisible ? "on" : "off",
+                 shaderEnabled ? "On" : "Off",
+                 windProgram ? "Loaded" : "Failed");
 
    const double bladeRpm =
       rotateBlades ? baseBladeDegreesPerSecond * windSpeed / 6.0 : 0.0;
@@ -1168,7 +1316,7 @@ void display()
    DrawText(10, 110, lightText);
    DrawText(10, 90, viewText);
    DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  [ / ]: wind");
+   DrawText(10, 50, "0-5: inspect  arrows: navigate  l: lighting  t: textures  g: glass  S: shader  [ / ]: wind");
    DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
    DrawText(10, 10,
             "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
@@ -1316,6 +1464,10 @@ void key(unsigned char ch, int, int)
    {
       glassVisible = 1 - glassVisible;
    }
+   else if (ch == 's' || ch == 'S')
+   {
+      shaderEnabled = 1 - shaderEnabled;
+   }
    else if (ch == 'l' || ch == 'L')
    {
       lighting = 1 - lighting;
@@ -1462,6 +1614,19 @@ int main(int argc, char* argv[])
    glutInitWindowSize(windowWidth, windowHeight);
    glutCreateWindow("Gunabhiram Aruru - Shader-Based Renewable Energy Farm Visualization");
 
+#ifdef USEGLEW
+   glewExperimental = GL_TRUE;
+   const GLenum glewStatus = glewInit();
+   if (glewStatus != GLEW_OK)
+   {
+      std::fprintf(stderr, "GLEW initialization failed: %s\n",
+                   glewGetErrorString(glewStatus));
+      shaderEnabled = 0;
+   }
+   // GLEW can generate GL_INVALID_ENUM while probing a compatibility context.
+   glGetError();
+#endif
+
    glutDisplayFunc(display);
    glutReshapeFunc(reshape);
    glutKeyboardFunc(key);
@@ -1478,6 +1643,22 @@ int main(int argc, char* argv[])
    textureRoof = LoadTexBMP("textures/roof.bmp");
    texturePath = LoadTexBMP("textures/path.bmp");
    textureMetal = LoadTexBMP("textures/metal.bmp");
+
+   if (shaderEnabled)
+   {
+      windProgram = CreateShaderProgram("wind.vert", "wind.frag");
+      if (windProgram)
+      {
+         CheckWindShader();
+         std::fprintf(stdout, "Wind shader compiled and linked successfully.\n");
+      }
+      else
+      {
+         shaderEnabled = 0;
+         std::fprintf(stderr,
+                      "Wind shader unavailable; continuing in shader-off mode.\n");
+      }
+   }
 
    glutMainLoop();
    return 0;
