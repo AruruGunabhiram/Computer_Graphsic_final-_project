@@ -253,7 +253,7 @@ const char* InspectionName()
       case 3: return "Battery unit";
       case 4: return "Substation";
       case 5: return "Greenhouse";
-      case 6: return "Barn/control building";
+      case 6: return "Control building";
       case 7: return "Weather station";
       case 8: return "Sheep";
       default: return "Farmer";
@@ -654,7 +654,7 @@ void drawPathNetwork()
    drawRoadStrip( 18, -9, 18, 2.2, 90);  // Solar field access.
    drawRoadStrip( 25, -7, 14, 2.2, 0);   // Battery yard access.
    drawRoadStrip( 21, 13, 14, 2.2, 0);   // Substation access.
-   drawRoadStrip( 20, 20, 14, 2.2, 90);  // Barn/control building access.
+   drawRoadStrip( 20, 19.5, 13, 2.2, 90); // Control-building entrance access.
    drawRoadStrip( -5, 18, 14, 2.2, 90);  // Greenhouse access.
    drawRoadStrip(-18, 24, 14, 2.2, 0);   // Sheep paddock access.
 }
@@ -971,33 +971,59 @@ void drawGableRoofUnit()
    glEnd();
 }
 
-// Draw the textured barn/shed and its gable roof.
-void drawBarnOrShed()
+// Draw the front-mounted facility sign. The board is opaque geometry, while
+// the lettering is drawn unlit just in front of it so it remains readable.
+void drawFarmSign()
 {
-   const float barnSpecular[] = {0.08f, 0.07f, 0.06f, 1.0f};
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glColor3f(0.76f, 0.58f, 0.30f);
+   }
+   else
+      glColor3f(0.34f, 0.20f, 0.08f);
+
+   drawBox(0, 1.78, -1.735, 2.35, 0.42, 0.10);
+   glDisable(GL_TEXTURE_2D);
+
+   const GLboolean lightingWasEnabled = glIsEnabled(GL_LIGHTING);
+   glDisable(GL_LIGHTING);
+   glColor3f(0.96f, 0.96f, 0.82f);
+   glRasterPos3d(-0.92, 1.72, -1.795);
+   const char* label = "CONTROL CENTER";
+   for (const char* ch = label; *ch; ++ch)
+      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *ch);
+   if (lightingWasEnabled)
+      glEnable(GL_LIGHTING);
+}
+
+// Draw an origin-centered renewable-energy control building with textured
+// walls and roof, metal details, windows, entrance, sign, and roof antenna.
+void drawControlBuilding()
+{
+   const float wallSpecular[] = {0.08f, 0.07f, 0.06f, 1.0f};
+   const float metalSpecular[] = {0.55f, 0.58f, 0.60f, 1.0f};
    const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
-   // Wood and painted farm surfaces remain predominantly diffuse.
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, barnSpecular);
+   // Painted wall surfaces remain mostly diffuse.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, wallSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
-
-   glPushMatrix();
-   glTranslated(5.7, 0, 3.4);
-   glRotated(-18, 0, 1, 0);
 
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
       glBindTexture(GL_TEXTURE_2D, textureWood);
-      glColor3f(0.90f, 0.62f, 0.56f);
+      glColor3f(0.74f, 0.82f, 0.76f);
    }
    else
-      glColor3f(0.55f, 0.16f, 0.12f);
+      glColor3f(0.38f, 0.50f, 0.42f);
    glPushMatrix();
-   glTranslated(0, 0.9, 0);
-   glScaled(2.4, 1.8, 2.0);
-   drawBoxUnit(3, 2, 2);
+   glTranslated(0, 1.1, 0);
+   glScaled(4.6, 2.2, 3.4);
+   drawBoxUnit(5, 2, 4);
    glPopMatrix();
 
    if (textures)
@@ -1006,27 +1032,68 @@ void drawBarnOrShed()
       glColor3f(0.90f, 0.90f, 0.88f);
    }
    else
-      glColor3f(0.30f, 0.12f, 0.09f);
+      glColor3f(0.22f, 0.25f, 0.26f);
    glPushMatrix();
-   glTranslated(0, 1.75, 0);
-   glScaled(2.7, 1.15, 2.3);
+   glTranslated(0, 2.15, 0);
+   glScaled(5.0, 1.35, 3.8);
    drawGableRoofUnit();
    glPopMatrix();
+   glDisable(GL_TEXTURE_2D);
 
+   // Front entrance uses a wood texture and metal frame/handle.
    if (textures)
    {
+      glEnable(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, textureWood);
-      glColor3f(0.96f, 0.90f, 0.74f);
+      glColor3f(0.70f, 0.46f, 0.24f);
    }
    else
-      glColor3f(0.80f, 0.72f, 0.52f);
-   glPushMatrix();
-   glTranslated(-1.21, 0.75, 0);
-   glScaled(0.05, 1.15, 0.75);
-   drawBoxUnit(1, 2, 1);
-   glPopMatrix();
+      glColor3f(0.38f, 0.20f, 0.08f);
+   drawBox(0, 0.82, -1.725, 1.05, 1.55, 0.10);
    glDisable(GL_TEXTURE_2D);
-   glPopMatrix();
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0f);
+   glColor3f(0.68f, 0.72f, 0.72f);
+   drawBox(-0.56, 0.82, -1.79, 0.07, 1.65, 0.07);
+   drawBox( 0.56, 0.82, -1.79, 0.07, 1.65, 0.07);
+   drawBox(0, 1.62, -1.79, 1.18, 0.07, 0.07);
+   glColor3f(0.88f, 0.70f, 0.18f);
+   drawBox(0.37, 0.80, -1.81, 0.08, 0.08, 0.06);
+
+   // Slightly raised blue-gray panes avoid z-fighting with the wall.
+   glColor3f(0.28f, 0.58f, 0.70f);
+   drawBox(-1.42, 1.12, -1.725, 0.85, 0.72, 0.08);
+   drawBox( 1.42, 1.12, -1.725, 0.85, 0.72, 0.08);
+   drawBox(-2.325, 1.12, 0.78, 0.08, 0.72, 1.05);
+   drawBox( 2.325, 1.12, 0.78, 0.08, 0.72, 1.05);
+
+   drawFarmSign();
+
+   // Rooftop equipment identifies the building as facility infrastructure.
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureMetal);
+   }
+   glColor3f(0.52f, 0.56f, 0.58f);
+   drawBox(-1.25, 2.92, 0.25, 0.72, 0.42, 0.62);
+   drawBox( 1.15, 3.05, 0.15, 0.10, 1.15, 0.10);
+   glDisable(GL_TEXTURE_2D);
+
+   glDisable(GL_LIGHTING);
+   glColor3f(0.80f, 0.84f, 0.86f);
+   glLineWidth(3.0f);
+   glBegin(GL_LINES);
+   glVertex3d(1.15, 3.55, 0.15);
+   glVertex3d(0.75, 3.28, 0.15);
+   glVertex3d(1.15, 3.55, 0.15);
+   glVertex3d(1.55, 3.28, 0.15);
+   glEnd();
+   glLineWidth(1.0f);
+   if (lighting)
+      glEnable(GL_LIGHTING);
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
@@ -1596,12 +1663,14 @@ void drawTurbineField()
    glPopMatrix();
 }
 
-// Draw the barn/farmhouse object group.
+// Place the control building beside its north-south access road. That branch
+// meets the substation road at (20, 13), linking operations to grid equipment.
 void drawBarnGroup()
 {
    glPushMatrix();
-   glTranslated(barnZoneX - 5.7, 0, barnZoneZ - 3.4);
-   drawBarnOrShed();
+   glTranslated(barnZoneX, 0, barnZoneZ);
+   glRotated(-18, 0, 1, 0);
+   drawControlBuilding();
    glPopMatrix();
 }
 
@@ -1944,9 +2013,10 @@ void drawInspectionObject()
          drawGreenhouse();
          break;
       case 6:
+         // Face the south-side entrance toward the default inspection camera.
          glPushMatrix();
-         glTranslated(-5.7, 0, -3.4);
-         drawBarnOrShed();
+         glRotated(180, 0, 1, 0);
+         drawControlBuilding();
          glPopMatrix();
          break;
       case 7:
