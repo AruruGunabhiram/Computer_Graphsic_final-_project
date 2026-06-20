@@ -133,9 +133,47 @@ enum CameraMode
    OVERHEAD_MODE
 };
 
+enum InspectionSelection
+{
+   INSPECT_FULL_SCENE = 0,
+   INSPECT_TURBINE,
+   INSPECT_BARN,
+   INSPECT_GREENHOUSE,
+   INSPECT_SOLAR_PANEL,
+   INSPECT_BATTERY_UNIT,
+   INSPECT_SHEEP,
+   INSPECT_WORKER,
+   INSPECT_BOULDERS,
+   INSPECTION_COUNT
+};
+
+struct InspectionPreset
+{
+   const char* name;
+   double targetY;
+   double distance;
+   int azimuth;
+   int elevation;
+};
+
+// One table owns the professor-facing labels and startup framing for every
+// inspection entry. The distance is the existing orbit "dim" value.
+const InspectionPreset inspectionPresets[INSPECTION_COUNT] =
+{
+   {"Full scene",                 1.0, defaultOrbitDistance, 35, 30},
+   {"Wind turbine",               2.6, 5.2,                  30, 14},
+   {"Barn / farmhouse",           1.6, 4.8,                  30, 18},
+   {"Greenhouse",                 1.2, 4.2,                  30, 18},
+   {"Solar panel",                0.8, 3.0,                  30, 18},
+   {"Battery / inverter unit",    1.6, 5.2,                  30, 16},
+   {"Sheep",                      0.9, 3.0,                  25, 15},
+   {"Farmer / worker",            1.4, 3.0,                  20, 12},
+   {"Rocks / boulders",           0.6, 3.2,                  30, 18}
+};
+
 int axes = 0;
 CameraMode mode = ORBIT_MODE;
-int inspectionMode = 0;
+int inspectionMode = INSPECT_FULL_SCENE;
 int rotateBlades = 1;
 int lighting = 1;
 int textures = 1;
@@ -314,20 +352,9 @@ const char* ModeName()
 // Return the exact object represented by the active inspection selection.
 const char* InspectionName()
 {
-   switch (inspectionMode)
-   {
-      case 0: return "Full scene";
-      case 1: return "Wind turbine";
-      case 2: return "Solar panel";
-      case 3: return "Battery / inverter storage";
-      case 4: return "Substation";
-      case 5: return "Greenhouse";
-      case 6: return "Control building";
-      case 7: return "Weather station";
-      case 8: return "Sheep";
-      case 9: return "Maintenance worker";
-      default: return "Rock / boulder";
-   }
+   if (inspectionMode < 0 || inspectionMode >= INSPECTION_COUNT)
+      return "Unknown";
+   return inspectionPresets[inspectionMode].name;
 }
 
 // Draw bitmap text in the active orthographic HUD projection.
@@ -347,7 +374,7 @@ void Project()
    if (mode == OVERHEAD_MODE)
    {
       const double extent =
-         inspectionMode == 0 ? overheadExtent : 2.0 * dim;
+         inspectionMode == INSPECT_FULL_SCENE ? overheadExtent : 2.0 * dim;
       glOrtho(-asp * extent, asp * extent, -extent, extent, 0.1, 200.0);
    }
    else
@@ -2349,7 +2376,9 @@ void CheckWindShader()
 // Texture coordinates carry along-strip phase and per-ribbon phase to GLSL.
 void drawWindRibbons()
 {
-   if (!showRibbons || (inspectionMode != 0 && inspectionMode != 1))
+   if (!showRibbons ||
+       (inspectionMode != INSPECT_FULL_SCENE &&
+        inspectionMode != INSPECT_TURBINE))
       return;
 
    const int ribbonCount = 12;
@@ -2501,70 +2530,95 @@ void drawInspectionGround()
       glEnable(GL_LIGHTING);
 }
 
-// Draw exactly one origin-centered major object for professor-facing inspection.
-void drawInspectionObject()
+// Draw the selected origin-centered model. The transparent flag lets the
+// greenhouse reuse the exact same transform in both render passes.
+void drawInspectionModel(bool transparentPass)
 {
-   drawInspectionGround();
-
    switch (inspectionMode)
    {
-      case 1:
+      case INSPECT_TURBINE:
+         if (transparentPass)
+            break;
          glPushMatrix();
          glScaled(1.35, 1.35, 1.35);
          drawTurbine();
          glPopMatrix();
          break;
-      case 2:
-         drawSolarPanel();
-         break;
-      case 3:
-         drawEnergyStorageUnit();
-         break;
-      case 4:
-         drawSubstation();
-         break;
-      case 5:
-         drawGreenhouse();
-         break;
-      case 6:
-         // Face the south-side entrance toward the default inspection camera.
+      case INSPECT_BARN:
+         if (transparentPass)
+            break;
+         // Turn the entrance toward the default positive-Z inspection camera.
          glPushMatrix();
          glRotated(180, 0, 1, 0);
          drawControlBuilding();
          glPopMatrix();
          break;
-      case 7:
-         drawWeatherStation();
+      case INSPECT_GREENHOUSE:
+         glPushMatrix();
+         glRotated(180, 0, 1, 0);
+         drawGreenhouse(transparentPass);
+         glPopMatrix();
          break;
-      case 8:
+      case INSPECT_SOLAR_PANEL:
+         if (!transparentPass)
+            drawSolarPanel();
+         break;
+      case INSPECT_BATTERY_UNIT:
+         if (!transparentPass)
+            drawEnergyStorageUnit();
+         break;
+      case INSPECT_SHEEP:
+         if (transparentPass)
+            break;
          glPushMatrix();
          glScaled(1.5, 1.5, 1.5);
          drawSheep();
          glPopMatrix();
          break;
-      case 9:
-         drawMaintenanceWorker();
+      case INSPECT_WORKER:
+         if (!transparentPass)
+            drawMaintenanceWorker();
          break;
-      case 10:
-         glPushMatrix();
-         glScaled(1.8, 1.8, 1.8);
-         drawBoulder(2);
-         glPopMatrix();
+      case INSPECT_BOULDERS:
+         if (transparentPass)
+            break;
+         // A compact cluster demonstrates multiple handmade variants at once.
+         {
+            const RockInstance cluster[] =
+            {
+               {-0.75,  0.00, 1.25, 0.82, 1.05,  18, 0},
+               { 0.70,  0.20, 0.92, 0.68, 0.80, -28, 2},
+               { 0.05, -0.65, 0.62, 0.48, 0.58,  38, 3}
+            };
+            for (int rock = 0; rock < 3; ++rock)
+               drawBoulderInstance(cluster[rock]);
+         }
+         break;
+      default:
          break;
    }
 }
 
+// Draw exactly one major object over a neutral grid for inspection.
+void drawInspectionObject()
+{
+   drawInspectionGround();
+   drawInspectionModel(false);
+}
+
 // Draw transparent scene content after opaque geometry. Greenhouse inspection
-// uses origin-centered glass while full-scene mode retains world placement.
+// uses the same origin-centered transform as its opaque pass.
 void drawTransparentPass()
 {
-   if (inspectionMode == 0)
+   if (inspectionMode == INSPECT_FULL_SCENE)
    {
       drawWindRibbons();
       drawGreenhouseTransparent();
    }
-   else if (inspectionMode == 5 && glassVisible)
-      drawGreenhouse(true);
+   else if (inspectionMode == INSPECT_GREENHOUSE && glassVisible)
+   {
+      drawInspectionModel(true);
+   }
 }
 
 // Draw a visible marker at the moving positional light source.
@@ -2644,7 +2698,8 @@ void display()
    {
       // Keep close inspection presets unchanged while framing the full farm
       // more tightly on startup and after reset.
-      const double orbitScale = inspectionMode == 0 ? 1.50 : 2.0;
+      const double orbitScale =
+         inspectionMode == INSPECT_FULL_SCENE ? 1.50 : 2.0;
       const double ex =
          viewTargetX - orbitScale * dim * Sin(th) * Cos(ph);
       const double ey = viewTargetY + orbitScale * dim * Sin(ph);
@@ -2663,19 +2718,21 @@ void display()
    }
    else
    {
-      const double targetY = inspectionMode == 0 ? 0.0 : viewTargetY;
+      const double targetY =
+         inspectionMode == INSPECT_FULL_SCENE ? 0.0 : viewTargetY;
       gluLookAt(viewTargetX, 100.0, viewTargetZ,
                 viewTargetX, targetY, viewTargetZ,
                 0, 0, -1);
    }
 
    ConfigureFog();
-   if (inspectionMode != 0)
+   if (inspectionMode != INSPECT_FULL_SCENE)
       glDisable(GL_FOG);
 
-   const double lightRadius = inspectionMode == 0 ? 38.0 : 7.0;
+   const double lightRadius =
+      inspectionMode == INSPECT_FULL_SCENE ? 38.0 : 7.0;
    const double activeLightHeight =
-      inspectionMode == 0 ? lightHeight : 7.0;
+      inspectionMode == INSPECT_FULL_SCENE ? lightHeight : 7.0;
    const float lightPosition[] =
    {
       static_cast<float>(lightRadius * Cos(lightAngle)),
@@ -2683,16 +2740,16 @@ void display()
       static_cast<float>(lightRadius * Sin(lightAngle)),
       1.0f
    };
-   if (inspectionMode == 0)
+   if (inspectionMode == INSPECT_FULL_SCENE)
       drawLightMarker(lightPosition[0], lightPosition[1], lightPosition[2]);
    if (lighting)
       ConfigureLighting(lightPosition);
    else
       glDisable(GL_LIGHTING);
 
-   // Mode zero renders the complete expanded farm. Modes one through nine
+   // Mode zero renders the complete expanded farm. Modes one through eight
    // render exactly one origin-centered object over the neutral inspection grid.
-   if (inspectionMode == 0)
+   if (inspectionMode == INSPECT_FULL_SCENE)
       drawScene();
    else
       drawInspectionObject();
@@ -2724,8 +2781,8 @@ void display()
    glColor3f(1, 1, 1);
    char sceneText[180];
    std::snprintf(sceneText, sizeof(sceneText),
-                 "Scene: %s   Camera: %s",
-                 InspectionName(), ModeName());
+                 "View %d/8: %s   Camera: %s",
+                 inspectionMode, InspectionName(), ModeName());
 
    char windText[160];
    std::snprintf(windText, sizeof(windText),
@@ -2737,7 +2794,7 @@ void display()
             "Shader-Based Renewable Energy Farm - Gunabhiram Aruru");
    DrawText(10, 43, sceneText);
    DrawText(10, 32, windText);
-   DrawText(10, 21, "0: full  1-9/b: inspect  m: camera");
+   DrawText(10, 21, "0: full scene  1-8: inspect object  m: camera");
    DrawText(10, 10,
             "p: shader  v: ribbons  q/ESC: quit");
 
@@ -2763,38 +2820,19 @@ void reshape(int width, int height)
 // Apply a centered orbit-camera preset for the full scene or inspected object.
 void SetInspectionMode(int selectedMode)
 {
+   if (selectedMode < INSPECT_FULL_SCENE ||
+       selectedMode >= INSPECTION_COUNT)
+      return;
+
    inspectionMode = selectedMode;
    mode = ORBIT_MODE;
-
-   if (inspectionMode == 0)
-   {
-      viewTargetX = 0;
-      viewTargetY = 1;
-      viewTargetZ = 0;
-      th = 35;
-      ph = 30;
-      dim = defaultOrbitDistance;
-      return;
-   }
-
+   const InspectionPreset& preset = inspectionPresets[inspectionMode];
    viewTargetX = 0;
+   viewTargetY = preset.targetY;
    viewTargetZ = 0;
-   th = 30;
-   ph = 16;
-
-   switch (inspectionMode)
-   {
-      case 1: viewTargetY = 2.2; dim = 5.0; break;
-      case 2: viewTargetY = 0.8; dim = 3.0; break;
-      case 3: viewTargetY = 1.6; dim = 5.4; break;
-      case 4: viewTargetY = 1.4; dim = 4.0; break;
-      case 5: viewTargetY = 1.2; dim = 4.2; break;
-      case 6: viewTargetY = 1.2; dim = 3.6; break;
-      case 7: viewTargetY = 1.8; dim = 4.0; break;
-      case 8: viewTargetY = 0.9; dim = 3.0; break;
-      case 9: viewTargetY = 1.4; dim = 3.4; break;
-      case 10: viewTargetY = 0.6; dim = 3.0; break;
-   }
+   th = preset.azimuth;
+   ph = preset.elevation;
+   dim = preset.distance;
 }
 
 // Restore the original full-scene camera and moving-light position.
@@ -2958,13 +2996,9 @@ void key(unsigned char ch, int, int)
       if (lightHeight > 60)
          lightHeight = 60;
    }
-   else if (ch >= '0' && ch <= '9')
+   else if (ch >= '0' && ch <= '8')
    {
       SetInspectionMode(ch - '0');
-   }
-   else if (ch == 'b' || ch == 'B')
-   {
-      SetInspectionMode(10);
    }
    else if (ch == '+' || ch == '=')
    {

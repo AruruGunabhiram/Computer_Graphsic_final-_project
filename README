@@ -38,15 +38,13 @@ Controls
 
     0                 Show the complete farm
     1                 Inspect one wind turbine
-    2                 Inspect one solar panel
-    3                 Inspect the battery / inverter storage shed
-    4                 Inspect the substation
-    5                 Inspect the greenhouse
-    6                 Inspect the control building
-    7                 Inspect the weather station
-    8                 Inspect one sheep
-    9                 Inspect the maintenance worker
-    b or B            Inspect one handmade boulder
+    2                 Inspect the barn / farmhouse
+    3                 Inspect the greenhouse
+    4                 Inspect one solar panel
+    5                 Inspect the battery / inverter unit
+    6                 Inspect one sheep
+    7                 Inspect the farmer / maintenance worker
+    8                 Inspect a handmade boulder cluster
     Left mouse drag   Rotate in orbit and first-person modes
     Mouse wheel       Change orbit distance (orbit mode only)
     Arrow keys        Rotate in orbit and first-person modes
@@ -74,8 +72,8 @@ Controls
 
 Object Inspection Mode
 ----------------------
-Keys 1 through 9 and B isolate one major object at the world origin over a neutral
-grid. Each mode uses a centered orbit-camera preset and retains orbit rotation
+Keys 1 through 8 isolate one major object at the world origin over a neutral
+grid. Each mode uses a dedicated orbit-camera preset and retains orbit rotation
 and distance controls. First-person movement updates the camera's world
 position; the fixed overhead camera provides a top-down review. This makes
 geometry, normals, materials, animation, and silhouette easy to inspect
@@ -181,7 +179,7 @@ New for the Final Project
 -------------------------
 
 - Expanded 90-by-90 farm with distinct connected energy zones
-- Reusable inspection modes for ten major objects
+- Reusable inspection modes for eight requested major-object categories
 - Solar farm, battery yard, substation, and visible electrical network
 - Upgraded control building with facility sign and rooftop equipment
 - Transparent greenhouse with correct opaque/transparent draw ordering
