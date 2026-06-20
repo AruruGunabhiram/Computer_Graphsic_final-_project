@@ -275,7 +275,7 @@ const char* InspectionName()
       case 0: return "Full scene";
       case 1: return "Wind turbine";
       case 2: return "Solar panel";
-      case 3: return "Battery unit";
+      case 3: return "Battery / inverter storage";
       case 4: return "Substation";
       case 5: return "Greenhouse";
       case 6: return "Control building";
@@ -1394,9 +1394,21 @@ void drawSolarFarm()
    glPopMatrix();
 }
 
-// Draw one origin-centered industrial battery container with a concrete
-// plinth, textured metal enclosure, front doors, vents, warning label, status
-// lamps, cable housing, and a side electrical box.
+// Draw one small emissive status lamp and restore neutral emission afterward.
+void drawIndicatorLight(double x, double y, double z,
+                        float red, float green, float blue)
+{
+   const float emission[] = {red, green, blue, 1.0f};
+   const float noEmission[] = {0, 0, 0, 1};
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+   glColor3f(red, green, blue);
+   drawBox(x, y, z, 0.08, 0.08, 0.04);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+}
+
+// Draw one origin-centered industrial battery cabinet with textured metal,
+// vents, warning marks, status lamps, and side cable equipment.
 void drawBatteryUnit()
 {
    const float cabinetSpecular[] = {0.32f, 0.34f, 0.36f, 1.0f};
@@ -1438,10 +1450,8 @@ void drawBatteryUnit()
       drawBox( 0.31, y, 0.474, 0.38, 0.035, 0.025);
    }
 
-   glColor3f(0.88f, 0.72f, 0.12f);
-   drawBox(-0.08, 1.55, 0.476, 0.08, 0.08, 0.025);
-   glColor3f(0.16f, 0.82f, 0.28f);
-   drawBox( 0.08, 1.55, 0.476, 0.08, 0.08, 0.025);
+   drawIndicatorLight(-0.08, 1.55, 0.486, 0.92f, 0.12f, 0.08f);
+   drawIndicatorLight( 0.08, 1.55, 0.486, 0.12f, 0.92f, 0.24f);
 
    // A raised yellow warning plate and black lightning mark use only handmade
    // polygons and sit forward of the doors to avoid z-fighting.
@@ -1473,49 +1483,124 @@ void drawBatteryUnit()
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Place four repeated battery containers on a concrete pad inside the existing
-// fenced battery zone. Handmade collection boxes and raised cable conduits
-// visually route their output north toward the substation.
-void drawBatteryYard()
+// Draw an open-front storage shed containing battery cabinets and a separate
+// inverter, with textured walls/roof and a visible output conduit.
+void drawEnergyStorageUnit()
 {
-   glColor3f(0.34f, 0.35f, 0.36f);
-   drawBox(batteryZoneX, 0.06, batteryZoneZ, 8.8, 0.12, 6.6);
+   const float wallSpecular[] = {0.10f, 0.09f, 0.08f, 1.0f};
+   const float metalSpecular[] = {0.42f, 0.44f, 0.46f, 1.0f};
 
-   glPushMatrix();
-   glTranslated(batteryZoneX, 0.12, batteryZoneZ);
-   for (int row = 0; row < 2; ++row)
+   glColor3f(0.34f, 0.35f, 0.36f);
+   drawBox(0, 0.08, 0, 7.4, 0.16, 5.0);
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, wallSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 10.0f);
+   if (textures)
    {
-      for (int column = 0; column < 2; ++column)
-      {
-         glPushMatrix();
-         glTranslated((column ? 1.9 : -1.9), 0,
-                      (row ? 1.45 : -1.45));
-         drawBatteryUnit();
-         glPopMatrix();
-      }
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureWood);
    }
+   glColor3f(0.64f, 0.72f, 0.66f);
+   glPushMatrix();
+   glTranslated(0, 1.48, -2.18);
+   glScaled(6.4, 2.8, 0.18);
+   drawBoxUnit(6, 3, 1);
+   glPopMatrix();
+   glPushMatrix();
+   glTranslated(-3.11, 1.48, -0.25);
+   glScaled(0.18, 2.8, 3.68);
+   drawBoxUnit(4, 3, 1);
+   glPopMatrix();
+   glPushMatrix();
+   glTranslated(3.11, 1.48, -1.25);
+   glScaled(0.18, 2.8, 1.68);
+   drawBoxUnit(2, 3, 1);
    glPopMatrix();
 
-   // Collection boxes receive short branch conduits from both cabinet rows.
-   glColor3f(0.18f, 0.21f, 0.22f);
-   drawBox(batteryZoneX + 3.55, 0.48, batteryZoneZ - 1.45,
-           0.48, 0.84, 0.62);
-   drawBox(batteryZoneX + 3.55, 0.48, batteryZoneZ + 1.45,
-           0.48, 0.84, 0.62);
-   drawBox(batteryZoneX + 2.75, 0.20, batteryZoneZ - 1.45,
-           1.35, 0.12, 0.16);
-   drawBox(batteryZoneX + 2.75, 0.20, batteryZoneZ + 1.45,
-           1.35, 0.12, 0.16);
+   if (textures)
+   {
+      glBindTexture(GL_TEXTURE_2D, textureRoof);
+      glColor3f(0.88f, 0.90f, 0.88f);
+   }
+   else
+      glColor3f(0.22f, 0.25f, 0.27f);
+   glPushMatrix();
+   glTranslated(0, 2.88, -0.25);
+   glScaled(6.9, 1.05, 4.5);
+   drawGableRoofUnit();
+   glPopMatrix();
+   glDisable(GL_TEXTURE_2D);
+
+   // Steel posts and fascia make the open face read as a utility shed.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 42.0f);
+   glColor3f(0.48f, 0.52f, 0.54f);
+   drawBox(-3.18, 1.50, 2.00, 0.16, 2.84, 0.16);
+   drawBox( 3.18, 1.50, 2.00, 0.16, 2.84, 0.16);
+   drawBox(0, 2.84, 2.00, 6.52, 0.16, 0.16);
+
+   // Three storage cabinets remain visible through the open front.
+   for (int cabinet = -1; cabinet <= 1; ++cabinet)
+   {
+      glPushMatrix();
+      glTranslated(1.65 * cabinet, 0.16, -0.55);
+      glScaled(0.88, 0.88, 0.88);
+      drawBatteryUnit();
+      glPopMatrix();
+   }
+
+   // The side inverter and its status lights identify the AC conversion stage.
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureMetal);
+   }
+   glColor3f(0.72f, 0.75f, 0.73f);
+   drawBox(2.62, 1.25, 0.85, 0.78, 1.78, 0.62);
+   glDisable(GL_TEXTURE_2D);
+   glColor3f(0.10f, 0.12f, 0.13f);
+   for (int vent = 0; vent < 5; ++vent)
+      drawBox(2.62, 0.78 + 0.14 * vent, 1.171,
+              0.52, 0.035, 0.025);
+   drawIndicatorLight(2.50, 1.78, 1.19, 0.10f, 0.92f, 0.22f);
+   drawIndicatorLight(2.72, 1.78, 1.19, 0.92f, 0.12f, 0.08f);
+
+   // Rectangular conduit sections are handmade boxes with outward normals.
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, textureMetal);
+   }
+   glColor3f(0.16f, 0.18f, 0.19f);
+   drawBox(3.15, 0.48, 0.85, 0.30, 0.30, 0.22);
+   drawBox(3.46, 0.33, 0.85, 0.62, 0.16, 0.22);
+   drawBox(3.70, 0.25, 0.85, 0.16, 0.32, 0.22);
+   glDisable(GL_TEXTURE_2D);
+
+   ResetMaterial();
+}
+
+// Place the complete storage shed in the battery zone and route its output
+// north toward the substation.
+void drawBatteryYard()
+{
+   glPushMatrix();
+   glTranslated(batteryZoneX, 0, batteryZoneZ);
+   glRotated(-8, 0, 1, 0);
+   drawEnergyStorageUnit();
+   glPopMatrix();
 
    // The main conduit exits the battery fence and runs to the south edge of
    // the substation fence, providing a clear visual connection between zones.
    glColor3f(0.10f, 0.12f, 0.13f);
-   drawBox(batteryZoneX + 3.55, 0.19, batteryZoneZ,
-           0.18, 0.14, 2.55);
-   drawBox(batteryZoneX + 3.55, 0.19, 3.0,
+   drawBox(batteryZoneX + 3.70, 0.19, batteryZoneZ + 0.85,
+           0.18, 0.14, 1.70);
+   drawBox(batteryZoneX + 3.70, 0.19, 3.0,
            0.18, 0.14, 17.2);
-   drawBox(substationZoneX + 2.25, 0.19, 11.45,
-           4.60, 0.14, 0.18);
+   drawBox(substationZoneX + 2.35, 0.19, 11.45,
+           4.80, 0.14, 0.18);
 }
 
 // Draw an origin-centered weather station. Its anemometer uses the shared
@@ -2269,7 +2354,7 @@ void drawInspectionObject()
          drawSolarPanel();
          break;
       case 3:
-         drawBatteryUnit();
+         drawEnergyStorageUnit();
          break;
       case 4:
          drawSubstation();
@@ -2531,7 +2616,7 @@ void SetInspectionMode(int selectedMode)
    {
       case 1: viewTargetY = 2.2; dim = 5.0; break;
       case 2: viewTargetY = 0.8; dim = 3.0; break;
-      case 3: viewTargetY = 1.0; dim = 2.8; break;
+      case 3: viewTargetY = 1.6; dim = 5.4; break;
       case 4: viewTargetY = 1.4; dim = 4.0; break;
       case 5: viewTargetY = 1.2; dim = 4.2; break;
       case 6: viewTargetY = 1.2; dim = 3.6; break;

@@ -39,7 +39,7 @@ Controls
     0                 Show the complete farm
     1                 Inspect one wind turbine
     2                 Inspect one solar panel
-    3                 Inspect one battery cabinet
+    3                 Inspect the battery / inverter storage shed
     4                 Inspect the substation
     5                 Inspect the greenhouse
     6                 Inspect the control building
@@ -87,7 +87,8 @@ handwritten vertices; no imported 3D models are used.
 
 - Three instanced wind turbines with handmade tapered towers and rotor blades
 - Nine solar-panel assemblies with supports, frames, and cell dividers
-- Four battery-storage cabinets with vents, warning marks, and cable equipment
+- Battery/inverter storage shed with textured walls and roof, three internal
+  battery cabinets, emissive status LEDs, side inverter, and output conduit
 - Electrical substation with transformers, gantries, insulators, and wiring
 - Transparent greenhouse with frame, door, roof, plant beds, and crop rows
 - Renewable-energy control building with windows, sign, rooftop box, and antenna
