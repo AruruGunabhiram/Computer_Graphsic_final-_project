@@ -63,6 +63,15 @@ const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
 const double anemometerDegreesPerSecond = 120.0;
 const double terrainHalfSize = 45.0;
+const double defaultOrbitDistance = 42.0;
+const double minOrbitDistance = 3.0;
+const double maxOrbitDistance = 80.0;
+const double overheadExtent = 50.0;
+const double firstPersonHeight = 1.8;
+const double firstPersonBoundary = 43.0;
+const double firstPersonStep = 0.8;
+const double maxPitch = 85.0;
+const double mouseSensitivity = 0.3;
 const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
 const float fogStart = 52.0f;
 const float fogEnd = 115.0f;
@@ -83,16 +92,24 @@ const double greenhouseZoneZ = 25.0;
 const double paddockZoneX = -25.0;
 const double paddockZoneZ = 24.0;
 
-int axes = 1;
-int mode = 1;
+// Keep the startup presentation uncluttered; axes remain available with 'a'.
+enum CameraMode
+{
+   ORBIT_MODE,
+   FIRST_PERSON_MODE,
+   OVERHEAD_MODE
+};
+
+int axes = 0;
+CameraMode mode = ORBIT_MODE;
 int inspectionMode = 0;
 int rotateBlades = 1;
 int lighting = 1;
 int textures = 1;
 int glassVisible = 1;
 int moveLight = 1;
-int shaderEnabled = 1;
-int windFlowVisible = 1;
+int showRibbons = 1;
+int useShader = 1;
 // Fog remains available through the 'f' toggle but starts disabled so the
 // complete energy facility is clear and readable on first launch.
 int fogEnabled = 0;
@@ -104,16 +121,20 @@ int th = 35;
 int ph = 30;
 int fov = 60;
 double asp = 1;
-double dim = 42;
+double dim = defaultOrbitDistance;
 double bladeAngle = 0;
 double anemometerAngle = 0;
-double fpX = 0;
-double fpY = 1;
-double fpZ = 42;
-int fpYaw = 0;
+double eyeX = 0;
+double eyeY = firstPersonHeight;
+double eyeZ = 42;
+double fpYaw = 0;
+double fpPitch = 0;
 double viewTargetX = 0;
 double viewTargetY = 1;
 double viewTargetZ = 0;
+int leftMouseDown = 0;
+int lastMouseX = 0;
+int lastMouseY = 0;
 int windowWidth = 1200;
 int windowHeight = 800;
 unsigned int textureGrass = 0;
@@ -240,9 +261,9 @@ const char* ModeName()
 {
    switch (mode)
    {
-      case 0: return "Oblique overhead orthogonal";
-      case 1: return "Oblique overhead perspective";
-      default: return "First person perspective";
+      case ORBIT_MODE: return "Orbit camera";
+      case FIRST_PERSON_MODE: return "First-person camera";
+      default: return "Fixed overhead camera";
    }
 }
 
@@ -269,23 +290,24 @@ void DrawText(int x, int y, const char* text)
 {
    glRasterPos2i(x, y);
    for (const char* ch = text; *ch; ++ch)
-      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *ch);
+      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *ch);
 }
 
-// Configure orthographic or perspective projection for the active camera mode.
+// Configure projection independently from camera position and orientation.
 void Project()
 {
    glMatrixMode(GL_PROJECTION);
    glLoadIdentity();
 
-   // Mode 0 uses an orthogonal volume; modes 1 and 2 share perspective.
-   if (mode == 0)
+   if (mode == OVERHEAD_MODE)
    {
-      glOrtho(-asp * dim, asp * dim, -dim, dim, -4 * dim, 4 * dim);
+      const double extent =
+         inspectionMode == 0 ? overheadExtent : 2.0 * dim;
+      glOrtho(-asp * extent, asp * extent, -extent, extent, 0.1, 200.0);
    }
    else
    {
-      gluPerspective(fov, asp, 0.1, 100);
+      gluPerspective(fov, asp, 0.1, 160);
    }
 
    glMatrixMode(GL_MODELVIEW);
@@ -372,6 +394,9 @@ void drawBox(double x, double y, double z,
    drawBoxUnit();
    glPopMatrix();
 }
+
+// Handmade latitude/longitude ellipsoid used by organic scene geometry.
+void drawLowPolyEllipsoid(double radiusX, double radiusY, double radiusZ);
 
 // Set only the specular portion of the current fixed-pipeline material.
 // Object color still supplies ambient/diffuse response through GL_COLOR_MATERIAL.
@@ -1128,13 +1153,13 @@ void drawPlantRow()
       glPushMatrix();
       glTranslated(x - 0.09, 0.48, 0);
       glScaled(0.17, 0.10, 0.08);
-      glutSolidSphere(1.0, 10, 8);
+      drawLowPolyEllipsoid(1.0, 1.0, 1.0);
       glPopMatrix();
 
       glPushMatrix();
       glTranslated(x + 0.09, 0.58, 0);
       glScaled(0.17, 0.10, 0.08);
-      glutSolidSphere(1.0, 10, 8);
+      drawLowPolyEllipsoid(1.0, 1.0, 1.0);
       glPopMatrix();
    }
 }
@@ -2057,7 +2082,7 @@ GLuint CreateShaderProgram(const char* vertexFile, const char* fragmentFile)
 // Verify the shader uniforms once at startup without affecting scene drawing.
 void CheckWindShader()
 {
-   if (!shaderEnabled || !windProgram)
+   if (!useShader || !windProgram)
       return;
 
    glUseProgram(windProgram);
@@ -2075,7 +2100,7 @@ void CheckWindShader()
 // Texture coordinates carry along-strip phase and per-ribbon phase to GLSL.
 void drawWindRibbons()
 {
-   if (!windFlowVisible || (inspectionMode != 0 && inspectionMode != 1))
+   if (!showRibbons || (inspectionMode != 0 && inspectionMode != 1))
       return;
 
    const int ribbonCount = 12;
@@ -2092,10 +2117,10 @@ void drawWindRibbons()
    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
    glDepthMask(GL_FALSE);
 
-   const bool useShader = shaderEnabled && windProgram;
+   const bool shaderActive = useShader && windProgram;
    const double elapsedSeconds =
       static_cast<double>(glutGet(GLUT_ELAPSED_TIME)) / 1000.0;
-   if (useShader)
+   if (shaderActive)
    {
       glUseProgram(windProgram);
 
@@ -2136,7 +2161,7 @@ void drawWindRibbons()
       const double halfWidth = 0.055 + 0.012 * (ribbon % 3);
 
       // The fallback retains readable curved airflow when GLSL is unavailable.
-      glColor4f(0.58f, 0.84f, 1.0f, useShader ? 1.0f : 0.24f);
+      glColor4f(0.58f, 0.84f, 1.0f, shaderActive ? 1.0f : 0.24f);
       glBegin(GL_QUAD_STRIP);
       for (int segment = 0; segment <= segmentCount; ++segment)
       {
@@ -2146,7 +2171,7 @@ void drawWindRibbons()
          // When GLSL is unavailable, advance the same simple sine phase on the
          // CPU so [ and ] still change visible airflow animation speed.
          const double fallbackTravel =
-            useShader ? 0.0 : elapsedSeconds * windSpeed * 2.2;
+            shaderActive ? 0.0 : elapsedSeconds * windSpeed * 2.2;
          const double curve =
             0.32 * std::sin(0.55 * x + ribbonPhase - fallbackTravel);
          const double y =
@@ -2227,9 +2252,7 @@ void drawInspectionGround()
       glEnable(GL_LIGHTING);
 }
 
-// Draw exactly one major object at the origin for professor-facing inspection.
-// Existing geometry is reused with inverse translations where legacy drawing
-// functions still contain their original local placement transform.
+// Draw exactly one origin-centered major object for professor-facing inspection.
 void drawInspectionObject()
 {
    drawInspectionGround();
@@ -2362,27 +2385,33 @@ void display()
 
    Project();
 
-   if (mode == 0)
+   if (mode == ORBIT_MODE)
    {
-      glRotated(ph, 1, 0, 0);
-      glRotated(th, 0, 1, 0);
-      glTranslated(-viewTargetX, -viewTargetY, -viewTargetZ);
-   }
-   else if (mode == 1)
-   {
-      const double ex = viewTargetX - 2 * dim * Sin(th) * Cos(ph);
-      const double ey = viewTargetY + 2 * dim * Sin(ph);
-      const double ez = viewTargetZ + 2 * dim * Cos(th) * Cos(ph);
+      // Keep close inspection presets unchanged while framing the full farm
+      // more tightly on startup and after reset.
+      const double orbitScale = inspectionMode == 0 ? 1.50 : 2.0;
+      const double ex =
+         viewTargetX - orbitScale * dim * Sin(th) * Cos(ph);
+      const double ey = viewTargetY + orbitScale * dim * Sin(ph);
+      const double ez =
+         viewTargetZ + orbitScale * dim * Cos(th) * Cos(ph);
       gluLookAt(ex, ey, ez,
                 viewTargetX, viewTargetY, viewTargetZ,
                 0, Cos(ph), 0);
    }
+   else if (mode == FIRST_PERSON_MODE)
+   {
+      const double lookX = eyeX + Sin(fpYaw) * Cos(fpPitch);
+      const double lookY = eyeY + Sin(fpPitch);
+      const double lookZ = eyeZ - Cos(fpYaw) * Cos(fpPitch);
+      gluLookAt(eyeX, eyeY, eyeZ, lookX, lookY, lookZ, 0, 1, 0);
+   }
    else
    {
-      // Look one unit ahead in the current first-person heading.
-      const double lookX = fpX + Sin(fpYaw);
-      const double lookZ = fpZ - Cos(fpYaw);
-      gluLookAt(fpX, fpY, fpZ, lookX, fpY, lookZ, 0, 1, 0);
+      const double targetY = inspectionMode == 0 ? 0.0 : viewTargetY;
+      gluLookAt(viewTargetX, 100.0, viewTargetZ,
+                viewTargetX, targetY, viewTargetZ,
+                0, 0, -1);
    }
 
    ConfigureFog();
@@ -2438,46 +2467,24 @@ void display()
    glLoadIdentity();
 
    glColor3f(1, 1, 1);
-   char viewText[100];
-   if (mode == 2)
-      std::snprintf(viewText, sizeof(viewText), "View angle: yaw=%d", fpYaw);
-   else
-      std::snprintf(viewText, sizeof(viewText), "View angle: th=%d ph=%d", th, ph);
+   char sceneText[180];
+   std::snprintf(sceneText, sizeof(sceneText),
+                 "Scene: %s   Camera: %s",
+                 InspectionName(), ModeName());
 
-   char lightText[100];
-   std::snprintf(lightText, sizeof(lightText),
-                 "Light: angle=%.0f height=%.1f movement=%s lighting=%s",
-                 lightAngle, lightHeight, moveLight ? "running" : "paused",
-                 lighting ? "on" : "off");
-
-   char stateText[240];
-   std::snprintf(stateText, sizeof(stateText),
-                 "Inspection: %s   Lighting: %s   Fog: %s   Glass: %s   Shader: %s   Wind Flow: %s",
-                 InspectionName(), lighting ? "on" : "off",
-                 fogEnabled ? "On" : "Off", glassVisible ? "on" : "off",
-                 windFlowVisible && shaderEnabled && windProgram ? "On" : "Off",
-                 windFlowVisible ? "On" : "Off");
-
-   const double bladeRpm =
-      rotateBlades ? baseBladeDegreesPerSecond * windSpeed / 6.0 : 0.0;
-   const double anemometerRpm =
-      anemometerDegreesPerSecond * windSpeed / 6.0;
-   char windText[140];
+   char windText[160];
    std::snprintf(windText, sizeof(windText),
-                 "Wind Speed: %.2f   Turbine RPM: %.2f   Anemometer RPM: %.2f   Blades: %s",
-                 windSpeed, bladeRpm, anemometerRpm,
-                 rotateBlades ? "running" : "paused");
+                 "Wind: %.2f   Shader: %s   Ribbons: %s",
+                 windSpeed, useShader && windProgram ? "On" : "Off",
+                 showRibbons ? "On" : "Off");
 
-   DrawText(10, 170, "Shader-Based Renewable Energy Farm Visualization");
-   DrawText(10, 150, stateText);
-   DrawText(10, 130, windText);
-   DrawText(10, 110, lightText);
-   DrawText(10, 90, viewText);
-   DrawText(10, 70, ModeName());
-   DrawText(10, 50, "0-9: inspect  arrows: navigate  l: light  f: fog  t: textures  g: glass  w: wind ribbons  [ / ]: wind");
-   DrawText(10, 30, "r: blades  R: reset camera  SPACE: pause light  ,/.: light angle  </>: light height");
+   DrawText(10, 54,
+            "Shader-Based Renewable Energy Farm - Gunabhiram Aruru");
+   DrawText(10, 43, sceneText);
+   DrawText(10, 32, windText);
+   DrawText(10, 21, "0: full  1-9: inspect  m: camera");
    DrawText(10, 10,
-            "m: camera mode  +/- or PgUp/PgDn: zoom/FOV  a: axes  q/ESC: exit");
+            "p: shader  v: ribbons  q/ESC: quit");
 
    glPopMatrix();
    glMatrixMode(GL_PROJECTION);
@@ -2498,13 +2505,11 @@ void reshape(int width, int height)
    Project();
 }
 
-// Apply a centered camera preset for full scene or one origin-centered object.
-// Arrow keys, camera-mode cycling, zoom, and first-person controls remain
-// unchanged after the preset is selected.
+// Apply a centered orbit-camera preset for the full scene or inspected object.
 void SetInspectionMode(int selectedMode)
 {
    inspectionMode = selectedMode;
-   mode = 1;
+   mode = ORBIT_MODE;
 
    if (inspectionMode == 0)
    {
@@ -2513,7 +2518,7 @@ void SetInspectionMode(int selectedMode)
       viewTargetZ = 0;
       th = 35;
       ph = 30;
-      dim = 42;
+      dim = defaultOrbitDistance;
       return;
    }
 
@@ -2540,34 +2545,60 @@ void SetInspectionMode(int selectedMode)
 void ResetCamera()
 {
    SetInspectionMode(0);
+   mode = ORBIT_MODE;
    fov = 60;
-   fpX = 0;
-   fpY = 1;
-   fpZ = 42;
+   eyeX = 0;
+   eyeY = firstPersonHeight;
+   eyeZ = 42;
    fpYaw = 0;
+   fpPitch = 0;
+   th = 35;
+   ph = 30;
+   dim = defaultOrbitDistance;
+   viewTargetX = 0;
+   viewTargetY = 1;
+   viewTargetZ = 0;
    lightAngle = 90;
    lightHeight = 25;
 }
 
-// Adjust orthographic size or perspective field of view.
+// Zoom changes orbit distance only; walking always changes eye position.
 void AdjustZoom(int direction)
 {
-   if (mode == 0)
-   {
-      dim -= 0.5 * direction;
-      if (dim < 3)
-         dim = 3;
-      if (dim > 80)
-         dim = 80;
-   }
-   else
-   {
-      fov -= 5 * direction;
-      if (fov < 20)
-         fov = 20;
-      if (fov > 100)
-         fov = 100;
-   }
+   if (mode != ORBIT_MODE)
+      return;
+
+   dim -= 0.8 * direction;
+   if (dim < minOrbitDistance)
+      dim = minOrbitDistance;
+   if (dim > maxOrbitDistance)
+      dim = maxOrbitDistance;
+}
+
+double Clamp(double value, double minimum, double maximum)
+{
+   if (value < minimum)
+      return minimum;
+   if (value > maximum)
+      return maximum;
+   return value;
+}
+
+void ClampPitch(double& pitch)
+{
+   pitch = Clamp(pitch, -maxPitch, maxPitch);
+}
+
+// Move on the ground plane so looking up or down never changes camera height.
+void MoveFirstPerson(double forward, double strafe)
+{
+   eyeX += firstPersonStep *
+           (forward * Sin(fpYaw) + strafe * Cos(fpYaw));
+   eyeZ += firstPersonStep *
+           (-forward * Cos(fpYaw) + strafe * Sin(fpYaw));
+   eyeX = Clamp(eyeX, -firstPersonBoundary, firstPersonBoundary);
+   eyeY = firstPersonHeight;
+   eyeZ = Clamp(eyeZ, -firstPersonBoundary, firstPersonBoundary);
 }
 
 // Handle normal-key controls and object inspection selection.
@@ -2579,7 +2610,23 @@ void key(unsigned char ch, int, int)
    }
    else if (ch == 'm' || ch == 'M')
    {
-      mode = (mode + 1) % 3;
+      mode = static_cast<CameraMode>((mode + 1) % 3);
+   }
+   else if (mode == FIRST_PERSON_MODE && (ch == 'w' || ch == 'W'))
+   {
+      MoveFirstPerson(1, 0);
+   }
+   else if (mode == FIRST_PERSON_MODE && (ch == 's' || ch == 'S'))
+   {
+      MoveFirstPerson(-1, 0);
+   }
+   else if (mode == FIRST_PERSON_MODE && (ch == 'a' || ch == 'A'))
+   {
+      MoveFirstPerson(0, -1);
+   }
+   else if (mode == FIRST_PERSON_MODE && (ch == 'd' || ch == 'D'))
+   {
+      MoveFirstPerson(0, 1);
    }
    else if (ch == 'a' || ch == 'A')
    {
@@ -2601,11 +2648,15 @@ void key(unsigned char ch, int, int)
    {
       glassVisible = 1 - glassVisible;
    }
-   else if (ch == 'w' || ch == 'W')
+   else if (ch == 'v' || ch == 'V')
    {
       // Visibility is independent from shader availability. If compilation
       // failed, turning ribbons on still uses drawWindRibbons()' fixed fallback.
-      windFlowVisible = 1 - windFlowVisible;
+      showRibbons = 1 - showRibbons;
+   }
+   else if (ch == 'p' || ch == 'P')
+   {
+      useShader = 1 - useShader;
    }
    else if (ch == 'l' || ch == 'L')
    {
@@ -2686,25 +2737,19 @@ void special(int key, int, int)
       return;
    }
 
-   if (mode == 2)
+   if (mode == FIRST_PERSON_MODE)
    {
       if (key == GLUT_KEY_LEFT)
-         fpYaw = (fpYaw - 5) % 360;
+         fpYaw -= 5;
       else if (key == GLUT_KEY_RIGHT)
-         fpYaw = (fpYaw + 5) % 360;
+         fpYaw += 5;
       else if (key == GLUT_KEY_UP)
-      {
-         fpX += 0.2 * Sin(fpYaw);
-         fpZ -= 0.2 * Cos(fpYaw);
-      }
+         fpPitch += 5;
       else if (key == GLUT_KEY_DOWN)
-      {
-         fpX -= 0.2 * Sin(fpYaw);
-         fpZ += 0.2 * Cos(fpYaw);
-      }
-
+         fpPitch -= 5;
+      ClampPitch(fpPitch);
    }
-   else
+   else if (mode == ORBIT_MODE)
    {
       if (key == GLUT_KEY_LEFT)
          th -= 5;
@@ -2720,6 +2765,55 @@ void special(int key, int, int)
          ph = 85;
       if (ph < -85)
          ph = -85;
+   }
+
+   glutPostRedisplay();
+}
+
+// Left drag rotates orbit and first-person cameras. Wheel zoom is orbit-only.
+void mouse(int button, int state, int x, int y)
+{
+   if (button == GLUT_LEFT_BUTTON)
+   {
+      leftMouseDown = state == GLUT_DOWN;
+      lastMouseX = x;
+      lastMouseY = y;
+   }
+   else if (state == GLUT_DOWN && button == 3)
+   {
+      AdjustZoom(1);
+   }
+   else if (state == GLUT_DOWN && button == 4)
+   {
+      AdjustZoom(-1);
+   }
+
+   Project();
+   glutPostRedisplay();
+}
+
+void motion(int x, int y)
+{
+   if (!leftMouseDown)
+      return;
+
+   const int dx = x - lastMouseX;
+   const int dy = y - lastMouseY;
+   lastMouseX = x;
+   lastMouseY = y;
+
+   if (mode == ORBIT_MODE)
+   {
+      th += static_cast<int>(dx * mouseSensitivity);
+      ph -= static_cast<int>(dy * mouseSensitivity);
+      ph = static_cast<int>(Clamp(ph, -maxPitch, maxPitch));
+      th %= 360;
+   }
+   else if (mode == FIRST_PERSON_MODE)
+   {
+      fpYaw += dx * mouseSensitivity;
+      fpPitch -= dy * mouseSensitivity;
+      ClampPitch(fpPitch);
    }
 
    glutPostRedisplay();
@@ -2776,7 +2870,7 @@ int main(int argc, char* argv[])
    {
       std::fprintf(stderr, "GLEW initialization failed: %s\n",
                    glewGetErrorString(glewStatus));
-      shaderEnabled = 0;
+      useShader = 0;
    }
    // GLEW can generate GL_INVALID_ENUM while probing a compatibility context.
    glGetError();
@@ -2786,6 +2880,8 @@ int main(int argc, char* argv[])
    glutReshapeFunc(reshape);
    glutKeyboardFunc(key);
    glutSpecialFunc(special);
+   glutMouseFunc(mouse);
+   glutMotionFunc(motion);
    glutIdleFunc(idle);
 
    glClearColor(0.07f, 0.09f, 0.12f, 1.0f);
@@ -2799,7 +2895,7 @@ int main(int argc, char* argv[])
    texturePath = LoadTexBMP("textures/path.bmp");
    textureMetal = LoadTexBMP("textures/metal.bmp");
 
-   if (shaderEnabled)
+   if (useShader)
    {
       windProgram = CreateShaderProgram("wind.vert", "wind.frag");
       if (windProgram)
@@ -2809,7 +2905,7 @@ int main(int argc, char* argv[])
       }
       else
       {
-         shaderEnabled = 0;
+         useShader = 0;
          std::fprintf(stderr,
                       "Wind shader unavailable; using fixed-pipeline ribbons.\n");
       }

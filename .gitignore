@@ -1,19 +1,11 @@
-# macOS
+# macOS metadata
 .DS_Store
 
 # Build output
 final
 *.o
-*.d
 *.dSYM/
 
-# Local editor settings
-.vscode/
-
-# Submission archives
-*.zip
-
-# Local course references and previous assignments
-Homework_3/
-Materials week_*/
-Computer_Graphics_Project_proposal.pdf
+# Local course reference materials
+All_materials/
+Friend referance textures/
