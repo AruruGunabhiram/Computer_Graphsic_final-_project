@@ -10,7 +10,7 @@ This final project is an interactive compatibility-profile OpenGL renewable
 energy farm. The startup view immediately shows the complete facility with
 textures, lighting, animated turbines, wind-flow ribbons, transparent
 greenhouse glass, solar generation, battery storage, a substation, a control
-building, a weather station, and an animated sheep paddock. Distance fog is
+building, a weather station, and a small sheep paddock. Distance fog is
 available but is off by default so the full scene is clear at launch.
 
 Build and Run
@@ -93,7 +93,7 @@ handwritten vertices; no imported 3D models are used.
 - Transparent greenhouse with frame, door, roof, plant beds, and crop rows
 - Renewable-energy control building with windows, sign, rooftop box, and antenna
 - Weather station with sensor box, wind vane, anemometer, and small solar panel
-- Fenced paddock with five animated low-poly sheep and a water trough
+- Fenced paddock with four instanced low-poly sheep and a water trough
 - Stylized farmer with hat, overalls, boots, and waving arm
 - Terrain, crop rows, roads, fences, signs, trees, rocks, and utility poles
 
@@ -164,7 +164,7 @@ New for the Final Project
 - Upgraded control building with facility sign and rooftop equipment
 - Transparent greenhouse with correct opaque/transparent draw ordering
 - Weather station coupled to the shared wind-speed model
-- Five animated sheep with path motion, leg swing, and head bob
+- Four varied sheep instances with a restrained idle head bob
 - Animated waving farmer
 - GLSL wind ribbons plus animated fixed-pipeline fallback
 - Shared wind-speed controls and expanded status HUD
@@ -177,7 +177,7 @@ Known Limitations
 - The project uses legacy compatibility-profile OpenGL, GLUT, and GLSL 1.20.
 - Transparent panels are ordered by object pass rather than sorted per polygon.
 - Wind ribbons visualize airflow but do not simulate fluid dynamics.
-- Sheep use fixed paths with no collision detection or artificial intelligence.
+- Sheep are decorative fixed placements rather than simulated agents.
 - First-person movement has no collision detection.
 - Bitmap text and texture paths require running the executable from this folder.
 - Textures are uncompressed 24-bit power-of-two BMP files.

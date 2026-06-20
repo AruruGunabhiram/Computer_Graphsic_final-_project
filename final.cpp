@@ -53,6 +53,15 @@ struct FenceSection
    double rotation;
 };
 
+struct SheepInstance
+{
+   double x;
+   double z;
+   double scale;
+   double rotation;
+   double idlePhase;
+};
+
 // -----------------------------------------------------------------------------
 // Constants and global application state
 // -----------------------------------------------------------------------------
@@ -1688,8 +1697,6 @@ void drawWeatherStation()
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
-// Draw one origin-centered low-poly sheep using only transformed handmade
-// boxes. The broad white body, dark face, ears, and four legs stay readable
 // Emit one vertex and its ellipsoid normal for the handmade low-poly body.
 void drawEllipsoidVertex(double latitude, double longitude,
                          double radiusX, double radiusY, double radiusZ)
@@ -1730,16 +1737,18 @@ void drawLowPolyEllipsoid(double radiusX, double radiusY, double radiusZ)
    }
 }
 
-// Draw one origin-centered low-poly sheep. The optional phase offsets the
-// simple periodic gait so paddock animals do not move in lockstep.
+// Draw one origin-centered low-poly sheep from handmade ellipsoids and boxes.
+// The optional phase offsets a restrained head motion between instances.
 void drawSheep(double phase = 0.0)
 {
    const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-   const double legSwing = 14.0 * std::sin(2.8 * timeSeconds + phase);
-   const double headBob = 0.035 * std::sin(2.8 * timeSeconds + phase);
+   const double idleMotion = std::sin(1.35 * timeSeconds + phase);
+   const double headBob = 0.022 * idleMotion;
+   const double headTilt = 1.5 * idleMotion;
 
    // Wool and skin are matte, preventing metallic highlights inherited from
    // energy equipment drawn earlier in the frame.
+   glDisable(GL_TEXTURE_2D);
    SetMaterial(0.04f, 0.04f, 0.04f, 6.0f);
 
    glColor3f(0.90f, 0.88f, 0.80f);
@@ -1759,7 +1768,9 @@ void drawSheep(double phase = 0.0)
    }
 
    glPushMatrix();
-   glTranslated(0, headBob, 0);
+   glTranslated(0, 1.02 + headBob, 0.48);
+   glRotated(headTilt, 1, 0, 0);
+   glTranslated(0, -1.02, -0.48);
    glColor3f(0.24f, 0.22f, 0.20f);
    drawBox(0, 1.12, 0.63, 0.58, 0.66, 0.46);
    drawBox(-0.42, 1.28, 0.65, 0.30, 0.11, 0.18);
@@ -1776,7 +1787,6 @@ void drawSheep(double phase = 0.0)
       {
          glPushMatrix();
          glTranslated(0.55 * side, 0.72, 0.29 * end);
-         glRotated(end * legSwing, 1, 0, 0);
          drawBox(0, -0.34, 0, 0.17, 0.68, 0.17);
          glPopMatrix();
       }
@@ -1792,8 +1802,18 @@ void drawSheep(double phase = 0.0)
    ResetMaterial();
 }
 
-// Draw the fenced paddock and five sheep following fixed elliptical paths.
-// This is deterministic path animation only; there is no collision or AI.
+// Transform and draw one sheep instance while keeping the model reusable.
+void drawSheepInstance(const SheepInstance& instance)
+{
+   glPushMatrix();
+   glTranslated(instance.x, 0, instance.z);
+   glRotated(instance.rotation, 0, 1, 0);
+   glScaled(instance.scale, instance.scale, instance.scale);
+   drawSheep(instance.idlePhase);
+   glPopMatrix();
+}
+
+// Draw the fenced grassy paddock and a small, deliberately placed sheep herd.
 void drawSheepPaddock()
 {
    glPushMatrix();
@@ -1811,27 +1831,17 @@ void drawSheepPaddock()
    glColor3f(0.20f, 0.46f, 0.68f);
    drawBox(-6.1, 0.52, 4.9, 2.25, 0.08, 0.58);
 
-   const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-   for (int sheep = 0; sheep < 5; ++sheep)
+   const SheepInstance herd[] =
    {
-      const double phase = 72.0 * sheep;
-      const double angle = 12.0 * timeSeconds + phase;
-      const double radiusX = 4.7 - 0.35 * (sheep % 2);
-      const double radiusZ = 4.2 - 0.40 * (sheep % 3);
-      const double x = radiusX * Cos(angle);
-      const double z = radiusZ * Sin(angle);
-      const double dx = -radiusX * Sin(angle);
-      const double dz =  radiusZ * Cos(angle);
-      const double heading =
-         std::atan2(dx, dz) * 180.0 / 3.1415927;
+      {-3.8, -2.6, 0.82, -18, 0.2},
+      {-0.8,  2.4, 0.70,  24, 1.5},
+      { 3.0, -1.2, 0.88,  63, 2.8},
+      { 4.3,  3.7, 0.76, -42, 4.1}
+   };
 
-      glPushMatrix();
-      glTranslated(x, 0, z);
-      glRotated(heading, 0, 1, 0);
-      glScaled(0.82, 0.82, 0.82);
-      drawSheep(phase * 3.1415927 / 180.0);
-      glPopMatrix();
-   }
+   const int sheepCount = sizeof(herd) / sizeof(herd[0]);
+   for (int sheep = 0; sheep < sheepCount; ++sheep)
+      drawSheepInstance(herd[sheep]);
 
    glPopMatrix();
 }
