@@ -45,7 +45,8 @@ Controls
     6                 Inspect the control building
     7                 Inspect the weather station
     8                 Inspect one sheep
-    9                 Inspect the farmer
+    9                 Inspect the maintenance worker
+    b or B            Inspect one handmade boulder
     Left mouse drag   Rotate in orbit and first-person modes
     Mouse wheel       Change orbit distance (orbit mode only)
     Arrow keys        Rotate in orbit and first-person modes
@@ -73,7 +74,7 @@ Controls
 
 Object Inspection Mode
 ----------------------
-Keys 1 through 9 isolate one major object at the world origin over a neutral
+Keys 1 through 9 and B isolate one major object at the world origin over a neutral
 grid. Each mode uses a centered orbit-camera preset and retains orbit rotation
 and distance controls. First-person movement updates the camera's world
 position; the fixed overhead camera provides a top-down review. This makes
@@ -94,8 +95,9 @@ handwritten vertices; no imported 3D models are used.
 - Renewable-energy control building with windows, sign, rooftop box, and antenna
 - Weather station with sensor box, wind vane, anemometer, and small solar panel
 - Fenced paddock with four instanced low-poly sheep and a water trough
-- Stylized farmer with hat, overalls, boots, and waving arm
-- Terrain, crop rows, roads, fences, signs, trees, rocks, and utility poles
+- Stylized maintenance worker with hard hat, safety vest, and work boots
+- Terrain, crop rows, roads, fences, signs, trees, textured boulders, and
+  utility poles
 
 Original Contribution
 ---------------------
@@ -133,9 +135,29 @@ after each transparent pass.
 A moving positional light represents the sun. Solar panels use strong
 specular highlights; batteries, turbines, and substation equipment use medium
 metal highlights; the control building and wood details are mostly diffuse;
-glass uses a restrained transparent highlight; sheep and farmer materials are
+glass uses a restrained transparent highlight; sheep and worker materials are
 matte. The shared box, roof, turbine, tree, and ellipsoid geometry supplies
 explicit normals, while `GL_NORMALIZE` handles transformed geometry.
+
+Texture Mapping and Credits
+---------------------------
+Textures are assigned by material type and repeated with object-scale texture
+coordinates to avoid obvious stretching. Grass is reserved for terrain, path
+for roads, metal for energy equipment, roof for building roofs, and wood for
+doors, signs, and fences.
+
+The following reference textures were supplied by a friend and are used only
+where they fit the renewable-farm theme:
+
+- `bark.bmp` on tree trunks
+- `leaves.bmp` on low-poly tree canopies
+- `rock.bmp` on handmade boulders
+- `wall.bmp` on the control building walls
+
+Other available reference textures were intentionally not included because
+they duplicated existing materials, did not map cleanly to the low-detail
+geometry, or did not fit the project theme. All 3D geometry and texture
+coordinates remain handwritten for this project.
 
 Code Reuse and AI Assistance
 ----------------------------
@@ -159,13 +181,14 @@ New for the Final Project
 -------------------------
 
 - Expanded 90-by-90 farm with distinct connected energy zones
-- Reusable inspection modes for nine major objects
+- Reusable inspection modes for ten major objects
 - Solar farm, battery yard, substation, and visible electrical network
 - Upgraded control building with facility sign and rooftop equipment
 - Transparent greenhouse with correct opaque/transparent draw ordering
 - Weather station coupled to the shared wind-speed model
 - Four varied sheep instances with a restrained idle head bob
-- Animated waving farmer
+- Static maintenance worker positioned at the battery shed
+- Instanced textured boulders along paths and in two restrained landscape clusters
 - GLSL wind ribbons plus animated fixed-pipeline fallback
 - Shared wind-speed controls and expanded status HUD
 - Moving sun marker and object-specific material polish
@@ -197,8 +220,12 @@ The submission ZIP contains only:
     README
     wind.vert
     wind.frag
+    textures/bark.bmp
     textures/grass.bmp
+    textures/leaves.bmp
     textures/metal.bmp
     textures/path.bmp
+    textures/rock.bmp
     textures/roof.bmp
+    textures/wall.bmp
     textures/wood.bmp

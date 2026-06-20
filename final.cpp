@@ -62,6 +62,30 @@ struct SheepInstance
    double idlePhase;
 };
 
+struct RockInstance
+{
+   double x;
+   double z;
+   double sx;
+   double sy;
+   double sz;
+   double rotation;
+   int variant;
+};
+
+struct TextureAssets
+{
+   unsigned int grass;
+   unsigned int wood;
+   unsigned int roof;
+   unsigned int path;
+   unsigned int metal;
+   unsigned int rock;
+   unsigned int bark;
+   unsigned int leaves;
+   unsigned int wall;
+};
+
 // -----------------------------------------------------------------------------
 // Constants and global application state
 // -----------------------------------------------------------------------------
@@ -146,11 +170,7 @@ int lastMouseX = 0;
 int lastMouseY = 0;
 int windowWidth = 1200;
 int windowHeight = 800;
-unsigned int textureGrass = 0;
-unsigned int textureWood = 0;
-unsigned int textureRoof = 0;
-unsigned int texturePath = 0;
-unsigned int textureMetal = 0;
+TextureAssets textureAssets = {};
 
 // -----------------------------------------------------------------------------
 // General utilities
@@ -261,6 +281,21 @@ unsigned int LoadTexBMP(const char* file)
    return texture;
 }
 
+// Load all scene textures in one place so object code refers to descriptive
+// fields rather than a growing list of unrelated global texture identifiers.
+void LoadSceneTextures()
+{
+   textureAssets.grass = LoadTexBMP("textures/grass.bmp");
+   textureAssets.wood = LoadTexBMP("textures/wood.bmp");
+   textureAssets.roof = LoadTexBMP("textures/roof.bmp");
+   textureAssets.path = LoadTexBMP("textures/path.bmp");
+   textureAssets.metal = LoadTexBMP("textures/metal.bmp");
+   textureAssets.rock = LoadTexBMP("textures/rock.bmp");
+   textureAssets.bark = LoadTexBMP("textures/bark.bmp");
+   textureAssets.leaves = LoadTexBMP("textures/leaves.bmp");
+   textureAssets.wall = LoadTexBMP("textures/wall.bmp");
+}
+
 // -----------------------------------------------------------------------------
 // Camera, projection, and HUD
 // -----------------------------------------------------------------------------
@@ -276,7 +311,7 @@ const char* ModeName()
    }
 }
 
-// Return the exact object represented by the active 0-9 inspection key.
+// Return the exact object represented by the active inspection selection.
 const char* InspectionName()
 {
    switch (inspectionMode)
@@ -290,7 +325,8 @@ const char* InspectionName()
       case 6: return "Control building";
       case 7: return "Weather station";
       case 8: return "Sheep";
-      default: return "Farmer";
+      case 9: return "Maintenance worker";
+      default: return "Rock / boulder";
    }
 }
 
@@ -576,7 +612,7 @@ void drawTurbine(double bladeOffset = 0.0)
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
       glColor3f(0.86f, 0.88f, 0.90f);
    }
    drawWindmillBaseUnit();
@@ -589,7 +625,7 @@ void drawTurbine(double bladeOffset = 0.0)
    else
       glColor3f(0.92f, 0.84f, 0.58f);
    if (textures)
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
    for (int blade = 0; blade < 3; ++blade)
    {
       glPushMatrix();
@@ -602,7 +638,7 @@ void drawTurbine(double bladeOffset = 0.0)
    else
       glColor3f(0.32f, 0.25f, 0.18f);
    if (textures)
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    drawHubUnit();
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
@@ -639,7 +675,7 @@ void drawExpandedTerrain()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureGrass);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.grass);
       glColor3f(1, 1, 1);
       glBegin(GL_QUADS);
       glNormal3f(0, 1, 0);
@@ -676,7 +712,7 @@ void drawRoadStrip(double x, double z, double length, double width,
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, texturePath);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.path);
       glColor3f(1, 1, 1);
    }
    else
@@ -722,7 +758,7 @@ void drawFenceSection(double x, double z, double length, double rotation)
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
       glColor3f(0.92f, 0.80f, 0.62f);
    }
    else
@@ -769,15 +805,97 @@ void drawFence()
    }
 }
 
-// Draw a small origin-centered rock used beside roads as erosion control.
-void drawRock(double x, double z, double scale)
+// Draw one triangle with a calculated flat normal and simple local planar
+// texture coordinates. Flat shading keeps the handmade boulder facets visible.
+void drawRockTriangle(const double a[3], const double b[3], const double c[3])
+{
+   const double ux = b[0] - a[0];
+   const double uy = b[1] - a[1];
+   const double uz = b[2] - a[2];
+   const double vx = c[0] - a[0];
+   const double vy = c[1] - a[1];
+   const double vz = c[2] - a[2];
+   double nx = uy * vz - uz * vy;
+   double ny = uz * vx - ux * vz;
+   double nz = ux * vy - uy * vx;
+   const double length = std::sqrt(nx * nx + ny * ny + nz * nz);
+   nx /= length;
+   ny /= length;
+   nz /= length;
+
+   glBegin(GL_TRIANGLES);
+   glNormal3d(nx, ny, nz);
+   glTexCoord2d(0.5 + 0.45 * a[0], 0.5 + 0.45 * a[2]);
+   glVertex3dv(a);
+   glTexCoord2d(0.5 + 0.45 * b[0], 0.5 + 0.45 * b[2]);
+   glVertex3dv(b);
+   glTexCoord2d(0.5 + 0.45 * c[0], 0.5 + 0.45 * c[2]);
+   glVertex3dv(c);
+   glEnd();
+}
+
+// Draw one origin-centered irregular boulder using two uneven rings and
+// handmade triangles. Variant changes the silhouette without separate models.
+void drawBoulder(int variant = 0)
+{
+   const int sides = 8;
+   double lower[sides][3];
+   double upper[sides][3];
+   const double top[3] =
+   {
+      0.08 * ((variant % 3) - 1),
+      0.62 + 0.04 * (variant % 2),
+      -0.06 * (variant % 3)
+   };
+   const double bottom[3] = {0, -0.38, 0};
+
+   for (int side = 0; side < sides; ++side)
+   {
+      const double angle = 360.0 * side / sides;
+      const double lowerRadius =
+         0.92 + 0.10 * std::sin(1.7 * side + 1.3 * variant);
+      const double upperRadius =
+         0.68 + 0.09 * std::cos(2.1 * side + 0.8 * variant);
+      lower[side][0] = lowerRadius * Cos(angle);
+      lower[side][1] = -0.22 + 0.05 * ((side + variant) % 3);
+      lower[side][2] = 0.82 * lowerRadius * Sin(angle);
+      upper[side][0] = upperRadius * Cos(angle + 7 * variant);
+      upper[side][1] = 0.24 + 0.05 * ((2 * side + variant) % 3);
+      upper[side][2] = 0.78 * upperRadius * Sin(angle + 7 * variant);
+   }
+
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.rock);
+   }
+   glColor3f(0.58f, 0.57f, 0.53f);
+   SetMaterial(0.08f, 0.08f, 0.08f, 8.0f);
+
+   for (int side = 0; side < sides; ++side)
+   {
+      const int next = (side + 1) % sides;
+      drawRockTriangle(lower[next], lower[side], upper[side]);
+      drawRockTriangle(lower[next], upper[side], upper[next]);
+      drawRockTriangle(upper[next], upper[side], top);
+      drawRockTriangle(bottom, lower[side], lower[next]);
+   }
+
+   glDisable(GL_TEXTURE_2D);
+   ResetMaterial();
+}
+
+// Transform one reusable boulder into a varied environmental instance.
+void drawBoulderInstance(const RockInstance& rock)
 {
    glPushMatrix();
-   glTranslated(x, 0.16 * scale, z);
-   glRotated(17 * x + 11 * z, 0, 1, 0);
-   glScaled(0.55 * scale, 0.32 * scale, 0.42 * scale);
-   glColor3f(0.34f, 0.35f, 0.33f);
-   drawBoxUnit();
+   // A small negative offset seats the boulder into the grass without allowing
+   // coplanar surfaces to overlap the terrain.
+   glTranslated(rock.x, 0.17 * rock.sy, rock.z);
+   glRotated(rock.rotation, 0, 1, 0);
+   glScaled(rock.sx, rock.sy, rock.sz);
+   drawBoulder(rock.variant);
    glPopMatrix();
 }
 
@@ -953,7 +1071,7 @@ void drawPowerLines()
       glEnable(GL_LIGHTING);
 }
 
-// Add farm-purpose secondary details: zone signs and roadside erosion stones.
+// Add farm-purpose secondary details: zone signs and restrained rock clusters.
 void drawFarmDetails()
 {
    drawZoneSign(-22, -9.2, 0.34f, 0.62f, 0.82f);
@@ -964,12 +1082,30 @@ void drawFarmDetails()
    drawZoneSign( -5, 18.0, 0.24f, 0.62f, 0.42f);
    drawZoneSign(-18, 24.0, 0.78f, 0.78f, 0.68f);
 
-   for (int i = -3; i <= 3; ++i)
+   const RockInstance rocks[] =
    {
-      drawRock(-7.0 + 5.0 * i, -2.1, 0.75 + 0.08 * (i & 1));
-      drawRock( 2.1, -7.0 + 5.0 * i, 0.68 + 0.07 * ((i + 1) & 1));
-   }
+      // Sparse erosion stones along two main path edges.
+      {-22.0, -2.15, 0.55, 0.34, 0.46,  18, 0},
+      {-12.0, -2.10, 0.48, 0.28, 0.42, -12, 1},
+      { -2.0, -2.18, 0.58, 0.32, 0.50,  34, 2},
+      {  8.0, -2.12, 0.50, 0.29, 0.44, -26, 3},
+      { 18.0, -2.16, 0.62, 0.36, 0.52,  11, 1},
+      {  2.15,-17.0, 0.48, 0.28, 0.42,  43, 2},
+      {  2.12, -7.0, 0.55, 0.31, 0.46, -18, 0},
+      {  2.18,  3.0, 0.46, 0.27, 0.40,  24, 3},
+      {  2.14, 13.0, 0.60, 0.34, 0.50,  -9, 1},
 
+      // Two compact clusters near the greenhouse and paddock fence.
+      {-12.4, 29.8, 1.05, 0.68, 0.88,  12, 0},
+      {-11.3, 30.2, 0.66, 0.43, 0.58, -31, 2},
+      {-12.0, 30.7, 0.52, 0.35, 0.48,  38, 3},
+      {-15.0, 17.1, 0.88, 0.55, 0.72, -17, 1},
+      {-14.1, 17.4, 0.56, 0.36, 0.50,  29, 3}
+   };
+
+   const int rockCount = sizeof(rocks) / sizeof(rocks[0]);
+   for (int rock = 0; rock < rockCount; ++rock)
+      drawBoulderInstance(rocks[rock]);
 }
 
 // Draw a handmade gable roof with explicitly calculated slope normals.
@@ -1022,7 +1158,7 @@ void drawFarmSign()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
       glColor3f(0.76f, 0.58f, 0.30f);
    }
    else
@@ -1058,7 +1194,7 @@ void drawControlBuilding()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wall);
       glColor3f(0.74f, 0.82f, 0.76f);
    }
    else
@@ -1066,12 +1202,12 @@ void drawControlBuilding()
    glPushMatrix();
    glTranslated(0, 1.1, 0);
    glScaled(4.6, 2.2, 3.4);
-   drawBoxUnit(5, 2, 4);
+   drawBoxUnit(4, 2, 3);
    glPopMatrix();
 
    if (textures)
    {
-      glBindTexture(GL_TEXTURE_2D, textureRoof);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.roof);
       glColor3f(0.90f, 0.90f, 0.88f);
    }
    else
@@ -1087,7 +1223,7 @@ void drawControlBuilding()
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
       glColor3f(0.70f, 0.46f, 0.24f);
    }
    else
@@ -1118,7 +1254,7 @@ void drawControlBuilding()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
    glColor3f(0.52f, 0.56f, 0.58f);
    drawBox(-1.25, 2.92, 0.25, 0.72, 0.42, 0.62);
@@ -1188,7 +1324,7 @@ void drawGreenhouseFrame()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
 
    drawBox(0, 0.08, -1.4, 4.2, 0.16, 0.14);
@@ -1433,7 +1569,7 @@ void drawBatteryUnit()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
    glColor3f(0.76f, 0.80f, 0.78f);
    drawBox(0, 1.05, 0, 1.25, 1.75, 0.88);
@@ -1508,7 +1644,7 @@ void drawEnergyStorageUnit()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
    }
    glColor3f(0.64f, 0.72f, 0.66f);
    glPushMatrix();
@@ -1529,7 +1665,7 @@ void drawEnergyStorageUnit()
 
    if (textures)
    {
-      glBindTexture(GL_TEXTURE_2D, textureRoof);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.roof);
       glColor3f(0.88f, 0.90f, 0.88f);
    }
    else
@@ -1564,7 +1700,7 @@ void drawEnergyStorageUnit()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
    glColor3f(0.72f, 0.75f, 0.73f);
    drawBox(2.62, 1.25, 0.85, 0.78, 1.78, 0.62);
@@ -1580,7 +1716,7 @@ void drawEnergyStorageUnit()
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
    glColor3f(0.16f, 0.18f, 0.19f);
    drawBox(3.15, 0.48, 0.85, 0.30, 0.30, 0.22);
@@ -1627,7 +1763,7 @@ void drawWeatherStation()
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureMetal);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    }
    glColor3f(0.48f, 0.52f, 0.54f);
    drawBox(0, 1.7, 0, 0.16, 3.4, 0.16);
@@ -1846,53 +1982,65 @@ void drawSheepPaddock()
    glPopMatrix();
 }
 
-// Draw one origin-centered stylized farmer. The right arm is transformed about
-// its shoulder and waves with elapsed time; the rest of the pose stays fixed.
-void drawFarmer()
+// Draw one block-built arm from a shoulder pivot. Small fixed rotations give
+// the worker a natural standing pose without introducing character animation.
+void drawWorkerArm(double side, double shoulderAngle, double elbowAngle)
 {
-   const double timeSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
-   const double waveAngle = 18.0 * std::sin(2.6 * timeSeconds);
+   glPushMatrix();
+   glTranslated(0.52 * side, 1.94, 0);
+   glRotated(side * shoulderAngle, 0, 0, 1);
+   glColor3f(0.18f, 0.34f, 0.52f);
+   drawBox(0, -0.38, 0, 0.24, 0.76, 0.26);
+   glTranslated(0, -0.72, 0);
+   glRotated(side * elbowAngle, 0, 0, 1);
+   glColor3f(0.70f, 0.52f, 0.38f);
+   drawBox(0, -0.27, 0, 0.22, 0.54, 0.22);
+   drawBox(0, -0.58, 0.02, 0.26, 0.16, 0.24);
+   glPopMatrix();
+}
 
+// Draw a simple handmade hard hat from flattened low-poly ellipsoids and a
+// thin box brim. The same primitives provide explicit normals for lighting.
+void drawWorkerHardHat()
+{
+   glColor3f(0.96f, 0.72f, 0.08f);
+   glPushMatrix();
+   glTranslated(0, 2.70, 0);
+   drawLowPolyEllipsoid(0.38, 0.18, 0.34);
+   glPopMatrix();
+   drawBox(0, 2.62, 0.05, 0.92, 0.09, 0.68);
+   drawBox(0, 2.82, 0, 0.10, 0.16, 0.55);
+}
+
+// Draw one origin-centered, static maintenance worker from handmade geometry.
+void drawMaintenanceWorker()
+{
+   glDisable(GL_TEXTURE_2D);
    SetMaterial(0.06f, 0.06f, 0.06f, 8.0f);
 
-   // Boots and separated legs keep the silhouette readable from mode 9.
-   glColor3f(0.16f, 0.12f, 0.08f);
+   // Work boots and separated trouser legs keep the silhouette readable.
+   glColor3f(0.10f, 0.09f, 0.08f);
    drawBox(-0.22, 0.13, 0.06, 0.30, 0.26, 0.46);
    drawBox( 0.22, 0.13, 0.06, 0.30, 0.26, 0.46);
-   glColor3f(0.18f, 0.25f, 0.34f);
+   glColor3f(0.15f, 0.20f, 0.27f);
    drawBox(-0.22, 0.70, 0, 0.28, 0.92, 0.32);
    drawBox( 0.22, 0.70, 0, 0.28, 0.92, 0.32);
 
-   // Shirt, overalls bib, and shoulder straps are simple raised cuboids.
-   glColor3f(0.70f, 0.20f, 0.16f);
+   // Blue work shirt, orange safety vest, and reflective bands use raised boxes.
+   glColor3f(0.18f, 0.34f, 0.52f);
    drawBox(0, 1.55, 0, 0.88, 1.02, 0.48);
-   glColor3f(0.18f, 0.38f, 0.62f);
-   drawBox(0, 1.48, 0.255, 0.60, 0.70, 0.055);
-   drawBox(-0.24, 1.88, 0.255, 0.10, 0.42, 0.055);
-   drawBox( 0.24, 1.88, 0.255, 0.10, 0.42, 0.055);
+   glColor3f(0.92f, 0.42f, 0.08f);
+   drawBox(0, 1.58, 0.255, 0.72, 0.82, 0.055);
+   drawBox(-0.30, 1.93, 0.255, 0.11, 0.34, 0.055);
+   drawBox( 0.30, 1.93, 0.255, 0.11, 0.34, 0.055);
+   glColor3f(0.84f, 0.86f, 0.72f);
+   drawBox(0, 1.52, 0.288, 0.74, 0.08, 0.025);
 
-   // Left arm remains relaxed.
-   glColor3f(0.70f, 0.20f, 0.16f);
-   drawBox(-0.56, 1.56, 0, 0.24, 0.88, 0.26);
-   glColor3f(0.78f, 0.58f, 0.42f);
-   drawBox(-0.56, 1.04, 0, 0.24, 0.22, 0.24);
-
-   // Right arm waves from a fixed shoulder pivot. A bent forearm makes the
-   // gesture obvious while avoiding walking or full-body animation artifacts.
-   glPushMatrix();
-   glTranslated(0.52, 1.92, 0);
-   glRotated(-128.0 + waveAngle, 0, 0, 1);
-   glColor3f(0.70f, 0.20f, 0.16f);
-   drawBox(0, -0.40, 0, 0.24, 0.80, 0.26);
-   glTranslated(0, -0.78, 0);
-   glRotated(72, 0, 0, 1);
-   glColor3f(0.78f, 0.58f, 0.42f);
-   drawBox(0, -0.32, 0, 0.22, 0.64, 0.22);
-   drawBox(0, -0.69, 0, 0.28, 0.20, 0.26);
-   glPopMatrix();
+   drawWorkerArm(-1, 5, 0);
+   drawWorkerArm( 1, 8, 18);
 
    // Block head, nose, eyes, and ears remain intentionally non-realistic.
-   glColor3f(0.78f, 0.58f, 0.42f);
+   glColor3f(0.70f, 0.52f, 0.38f);
    drawBox(0, 2.34, 0, 0.62, 0.62, 0.54);
    drawBox(0, 2.30, 0.30, 0.16, 0.18, 0.12);
    drawBox(-0.35, 2.36, 0, 0.10, 0.20, 0.18);
@@ -1901,17 +2049,7 @@ void drawFarmer()
    drawBox(-0.14, 2.43, 0.291, 0.07, 0.07, 0.025);
    drawBox( 0.14, 2.43, 0.291, 0.07, 0.07, 0.025);
 
-   // The broad textured brim and low crown read clearly as a farm hat.
-   if (textures)
-   {
-      glEnable(GL_TEXTURE_2D);
-      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
-   }
-   glColor3f(0.76f, 0.57f, 0.20f);
-   drawBox(0, 2.69, 0, 1.10, 0.12, 0.82);
-   drawBox(0, 2.85, 0, 0.66, 0.28, 0.56);
-   glDisable(GL_TEXTURE_2D);
+   drawWorkerHardHat();
 
    ResetMaterial();
 }
@@ -1927,10 +2065,12 @@ void drawFarmCharactersAndInstruments()
    glPopMatrix();
 
    glPushMatrix();
-   // Stand beside the paddock's east-side gate, clear of all sheep paths.
-   glTranslated(paddockZoneX + 8.8, 0, paddockZoneZ - 1.0);
-   glRotated(-25, 0, 1, 0);
-   drawFarmer();
+   // Stand just outside the battery shed's open front, facing the cabinets.
+   glTranslated(batteryZoneX, 0, batteryZoneZ);
+   glRotated(-8, 0, 1, 0);
+   glTranslated(-2.2, 0, 3.35);
+   glRotated(180, 0, 1, 0);
+   drawMaintenanceWorker();
    glPopMatrix();
 }
 
@@ -1948,12 +2088,22 @@ void drawTree(double x, double z, double scale)
    {
       glEnable(GL_TEXTURE_2D);
       glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-      glBindTexture(GL_TEXTURE_2D, textureWood);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.bark);
    }
    glColor3f(0.38f, 0.22f, 0.10f);
-   drawBox(0, 0.65, 0, 0.28, 1.3, 0.28);
+   glPushMatrix();
+   glTranslated(0, 0.65, 0);
+   glScaled(0.28, 1.3, 0.28);
+   drawBoxUnit(1, 2.5, 1);
+   glPopMatrix();
    glDisable(GL_TEXTURE_2D);
 
+   if (textures)
+   {
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+      glBindTexture(GL_TEXTURE_2D, textureAssets.leaves);
+   }
    for (int layer = 0; layer < 2; ++layer)
    {
       const double baseY = 0.75 + 0.55 * layer;
@@ -1971,12 +2121,16 @@ void drawTree(double x, double z, double scale)
          glNormal3d(height * Cos(middleAngle) / normalLength,
                     radius / normalLength,
                     height * Sin(middleAngle) / normalLength);
+         glTexCoord2d((i + 0.5) / sides, 1);
          glVertex3d(0, baseY + height, 0);
+         glTexCoord2d(static_cast<double>(i + 1) / sides, 0);
          glVertex3d(radius * Cos(nextAngle), baseY, radius * Sin(nextAngle));
+         glTexCoord2d(static_cast<double>(i) / sides, 0);
          glVertex3d(radius * Cos(angle), baseY, radius * Sin(angle));
       }
       glEnd();
    }
+   glDisable(GL_TEXTURE_2D);
 
    glPopMatrix();
 }
@@ -2389,7 +2543,13 @@ void drawInspectionObject()
          glPopMatrix();
          break;
       case 9:
-         drawFarmer();
+         drawMaintenanceWorker();
+         break;
+      case 10:
+         glPushMatrix();
+         glScaled(1.8, 1.8, 1.8);
+         drawBoulder(2);
+         glPopMatrix();
          break;
    }
 }
@@ -2577,7 +2737,7 @@ void display()
             "Shader-Based Renewable Energy Farm - Gunabhiram Aruru");
    DrawText(10, 43, sceneText);
    DrawText(10, 32, windText);
-   DrawText(10, 21, "0: full  1-9: inspect  m: camera");
+   DrawText(10, 21, "0: full  1-9/b: inspect  m: camera");
    DrawText(10, 10,
             "p: shader  v: ribbons  q/ESC: quit");
 
@@ -2633,6 +2793,7 @@ void SetInspectionMode(int selectedMode)
       case 7: viewTargetY = 1.8; dim = 4.0; break;
       case 8: viewTargetY = 0.9; dim = 3.0; break;
       case 9: viewTargetY = 1.4; dim = 3.4; break;
+      case 10: viewTargetY = 0.6; dim = 3.0; break;
    }
 }
 
@@ -2800,6 +2961,10 @@ void key(unsigned char ch, int, int)
    else if (ch >= '0' && ch <= '9')
    {
       SetInspectionMode(ch - '0');
+   }
+   else if (ch == 'b' || ch == 'B')
+   {
+      SetInspectionMode(10);
    }
    else if (ch == '+' || ch == '=')
    {
@@ -2984,11 +3149,7 @@ int main(int argc, char* argv[])
    glEnable(GL_DEPTH_TEST);
    glEnable(GL_NORMALIZE);
 
-   textureGrass = LoadTexBMP("textures/grass.bmp");
-   textureWood = LoadTexBMP("textures/wood.bmp");
-   textureRoof = LoadTexBMP("textures/roof.bmp");
-   texturePath = LoadTexBMP("textures/path.bmp");
-   textureMetal = LoadTexBMP("textures/metal.bmp");
+   LoadSceneTextures();
 
    if (useShader)
    {
