@@ -203,21 +203,25 @@ Camera and projection code, GLUT setup, BMP texture loading, lighting patterns,
 and shader-loading structure are based on previous assignments and class
 examples where applicable.
 
-The project extends Homework 3 with new and expanded geometry, object
-inspection, larger scene composition, animation, shader/fallback visualization,
-transparency, fog, README cleanup, and final polish.
+This project is a large extension of my Homework 3 project, with new and
+expanded geometry, object inspection, larger scene composition, animation,
+shader/fallback visualization, transparency, fog, README cleanup, and final
+polish.
 
 Some texture images are external reference assets. The submitted textures are
 used on handmade geometry; no external 3D models are used.
 
-Any AI-assisted code or writing was reviewed, tested, and modified before
-submission. I am responsible for all submitted code and any errors in reused or
-AI-assisted code.
+AI Assistance:
+AI tools were used as a support tool for planning, debugging, audit checklists,
+README wording, refactoring suggestions, and small code-pattern suggestions. I
+reviewed, tested, and modified the code before submission. The submitted
+program reflects my own integration, debugging, scene design decisions, OpenGL
+state management, and final implementation choices.
 
 11. Time Spent
 --------------
 
-Time spent so far: approximately 37 hours.
+Time spent so far: approximately 47 hours.
 Expected additional time before final submission: approximately 6 hours.
 
 12. Known Limitations
