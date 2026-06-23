@@ -2479,7 +2479,9 @@ void CheckWindShader()
    glUseProgram(0);
 }
 
-// Draw handmade translucent wind-flow strips across the turbine field.
+// Draw a limited set of handmade translucent wind-flow strips from west to
+// east across the turbine field. Their height and lane positions deliberately
+// pass around the towers and rotor hubs instead of covering the whole scene.
 // Only this function activates the wind shader; every exit restores program 0.
 // Texture coordinates carry along-strip phase and per-ribbon phase to GLSL.
 void drawWindRibbons()
@@ -2489,12 +2491,15 @@ void drawWindRibbons()
         inspectionMode != INSPECT_TURBINE))
       return;
 
-   const int ribbonCount = 12;
-   const int segmentCount = 40;
+   const int ribbonCount = 8;
+   const int segmentCount = 44;
    const double ribbonZ[ribbonCount] =
    {
-      -4.8, -4.0, -3.3, -2.6, -1.8, -1.0,
-      -0.2,  0.6,  1.4,  2.2,  3.1,  4.0
+      -2.65, -1.90, -1.15, -0.35, 0.45, 1.20, 2.00, 2.75
+   };
+   const double ribbonY[ribbonCount] =
+   {
+      1.55, 2.20, 2.78, 1.82, 2.55, 3.10, 2.00, 2.72
    };
 
    glDisable(GL_LIGHTING);
@@ -2542,28 +2547,53 @@ void drawWindRibbons()
    glTranslated(windZoneX, 0, windZoneZ);
    for (int ribbon = 0; ribbon < ribbonCount; ++ribbon)
    {
-      const double ribbonPhase = 0.73 * ribbon;
-      const double centerY = 0.75 + 0.22 * (ribbon % 7);
-      const double halfWidth = 0.055 + 0.012 * (ribbon % 3);
+      const double ribbonPhase = 0.91 * ribbon;
+      const double centerY = ribbonY[ribbon];
+      const double halfWidth = 0.045 + 0.008 * (ribbon % 3);
+      const double speedRatio = windSpeed / maxWindSpeed;
+      const double fallbackAmplitudeY = 0.045 + 0.022 * windSpeed;
+      const double fallbackAmplitudeZ = 0.035 + 0.016 * windSpeed;
+      const double fallbackFrequency = 14.0 + 6.0 * speedRatio;
+      const double fallbackTravel = elapsedSeconds * windSpeed * 2.35;
 
-      // The fallback retains readable curved airflow when GLSL is unavailable.
-      glColor4f(0.58f, 0.84f, 1.0f, shaderActive ? 1.0f : 0.24f);
+      // Shader alpha is interpreted in wind.frag; the CPU fallback uses the
+      // same subtle base opacity directly through fixed-pipeline blending.
+      glColor4f(0.50f, 0.78f, 0.94f, shaderActive ? 0.24f : 0.18f);
       glBegin(GL_QUAD_STRIP);
       for (int segment = 0; segment <= segmentCount; ++segment)
       {
          const double along =
             static_cast<double>(segment) / segmentCount;
-         const double x = -8.5 + 17.0 * along;
-         // When GLSL is unavailable, advance the same simple sine phase on the
-         // CPU so [ and ] still change visible airflow animation speed.
-         const double fallbackTravel =
-            shaderActive ? 0.0 : elapsedSeconds * windSpeed * 2.2;
-         const double curve =
-            0.32 * std::sin(0.55 * x + ribbonPhase - fallbackTravel);
-         const double y =
-            centerY +
-            0.08 * std::sin(0.9 * x + ribbonPhase - fallbackTravel);
-         const double z = ribbonZ[ribbon] + curve;
+         const double x = -7.4 + 15.4 * along;
+         const double laneCurve =
+            0.11 * std::sin(3.1415927 * along + 0.45 * ribbonPhase);
+         double y = centerY;
+         double z = ribbonZ[ribbon] + laneCurve;
+
+         // If GLSL is disabled or failed to compile, reproduce the shader's
+         // speed-dependent travel and amplitude on the CPU. The ribbons keep
+         // animating, and [ / ] still visibly change the airflow response.
+         if (!shaderActive)
+         {
+            const double wavePhase =
+               along * fallbackFrequency - fallbackTravel + ribbonPhase;
+            y += std::sin(wavePhase) * fallbackAmplitudeY;
+            z += std::cos(wavePhase * 0.68) * fallbackAmplitudeZ;
+         }
+
+         // Fade fixed-pipeline strips at both ends; GLSL applies the equivalent
+         // smooth fade per fragment using the along-strip texture coordinate.
+         double endFade = 1.0;
+         if (!shaderActive)
+         {
+            const double startFade =
+               std::fmax(0.0, std::fmin(1.0, along / 0.10));
+            const double finishFade =
+               std::fmax(0.0, std::fmin(1.0, (1.0 - along) / 0.14));
+            endFade = startFade * finishFade;
+            glColor4f(0.50f, 0.78f, 0.94f,
+                      static_cast<float>(0.18 * endFade));
+         }
 
          glTexCoord2d(along, ribbonPhase);
          glVertex3d(x, y - halfWidth, z);
@@ -2895,7 +2925,7 @@ void display()
    char windText[160];
    std::snprintf(windText, sizeof(windText),
                  "Wind: %.2f   Shader: %s   Ribbons: %s",
-                 windSpeed, useShader && windProgram ? "On" : "Off",
+                 windSpeed, useShader && windProgram ? "On" : "Off / fallback",
                  showRibbons ? "On" : "Off");
 
    DrawText(10, 54,
@@ -3229,8 +3259,9 @@ void idle()
    const int elapsed = currentTime - previousTime;
    previousTime = currentTime;
 
-   // The wind model scales the original 45-degree/second blade speed linearly.
-   // Elapsed wall-clock time keeps motion smooth and independent of frame rate.
+   // The same windSpeed uniform driving ribbon travel and wave amplitude also
+   // scales turbine RPM here. Elapsed wall-clock time keeps both animations
+   // smooth and frame-rate independent.
    if (rotateBlades)
    {
       const double elapsedSeconds = elapsed / 1000.0;
