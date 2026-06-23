@@ -104,7 +104,7 @@ const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
 const double anemometerDegreesPerSecond = 120.0;
 const double terrainHalfSize = 45.0;
-const double defaultOrbitDistance = 63.0;
+const double defaultOrbitDistance = 54.0;
 const double minOrbitDistance = 3.0;
 const double maxOrbitDistance = 80.0;
 const double overheadExtent = 50.0;
@@ -115,9 +115,9 @@ const double maxPitch = 85.0;
 const double mouseSensitivity = 0.3;
 // Match the clear color so enabled fog fades distant geometry into the sky
 // without creating a visible horizon band. The long range keeps it subtle.
-const float fogColor[] = {0.07f, 0.09f, 0.12f, 1.0f};
-const float fogStart = 58.0f;
-const float fogEnd = 125.0f;
+const float fogColor[] = {0.10f, 0.15f, 0.20f, 1.0f};
+const float fogStart = 62.0f;
+const float fogEnd = 132.0f;
 
 // Zone centers keep the large farm layout explicit and easy to extend.
 const double windZoneX = -22.0;
@@ -160,7 +160,9 @@ enum InspectionSelection
 struct InspectionPreset
 {
    const char* name;
+   double targetX;
    double targetY;
+   double targetZ;
    double cameraDistance;
    int azimuth;
    int elevation;
@@ -171,15 +173,15 @@ struct InspectionPreset
 // view without clipping when the user begins orbiting.
 const InspectionPreset inspectionPresets[INSPECTION_COUNT] =
 {
-   {"Full scene",                 1.0, defaultOrbitDistance, 35, 30},
-   {"Wind turbine",               2.8,  8.0, 18, 10},
-   {"Control Center",             1.5,  8.0,  8, 14},
-   {"Greenhouse",                 1.2,  6.4, 25, 17},
-   {"Solar panel",                0.8,  4.5, 28, 18},
-   {"Battery / inverter",         1.5,  5.8, 25, 14},
-   {"Sheep",                      0.9,  4.0, 25, 12},
-   {"Maintenance worker",         1.2,  4.2, 20, 10},
-   {"Boulder cluster",            0.6,  4.6, 30, 16}
+   {"Full scene",             0.0, 1.5,  0.0, defaultOrbitDistance, 38, 22},
+   {"Wind turbine",           0.0, 2.4,  0.0,  7.4, 20, 10},
+   {"Control Center",         0.6, 1.5, -0.1,  9.6, 12, 13},
+   {"Greenhouse",             0.0, 1.2,  0.0,  6.2, 26, 16},
+   {"Solar panel",            0.0, 0.8,  0.0,  4.2, 30, 17},
+   {"Battery / inverter",     0.0, 1.5, -0.1,  7.0, 26, 13},
+   {"Sheep",                  0.0, 1.0,  0.0,  4.0, 28, 11},
+   {"Maintenance worker",     0.0, 1.3,  0.0,  4.0, 22, 9},
+   {"Boulder cluster",        0.0, 0.6,  0.0,  4.4, 32, 15}
 };
 
 int axes = 0;
@@ -197,11 +199,11 @@ int shadowsEnabled = 1;
 // complete energy facility is clear and readable on first launch.
 int fogEnabled = 0;
 GLuint windProgram = 0;
-double windSpeed = 1.0;
-double lightAngle = 90;
-double lightHeight = 25;
-int th = 35;
-int ph = 30;
+double windSpeed = 1.5;
+double lightAngle = 48;
+double lightHeight = 30;
+int th = 38;
+int ph = 22;
 int fov = 60;
 double asp = 1;
 double dim = defaultOrbitDistance;
@@ -213,7 +215,7 @@ double eyeZ = 42;
 double fpYaw = 0;
 double fpPitch = 0;
 double viewTargetX = 0;
-double viewTargetY = 1;
+double viewTargetY = 1.5;
 double viewTargetZ = 0;
 int leftMouseDown = 0;
 int lastMouseX = 0;
@@ -538,35 +540,38 @@ void ResetMaterial()
 // Draw one handmade turbine blade with front, back, and edge normals.
 void drawBladeUnit()
 {
-   const double x[5] = {-0.08, 0.17, 0.30, 0.09, -0.16};
-   const double y[5] = { 0.20, 0.43, 1.55, 1.78,  0.62};
-   const double minX = -0.16;
-   const double width = 0.46;
+   const int vertexCount = 7;
+   const double x[vertexCount] =
+      {-0.10, 0.16, 0.25, 0.25, 0.10, -0.11, -0.17};
+   const double y[vertexCount] =
+      { 0.18, 0.38, 0.92, 1.48, 1.82,  1.63,  0.62};
+   const double minX = -0.17;
+   const double width = 0.42;
    const double front = 0.07;
    const double back = -0.07;
 
    glBegin(GL_POLYGON);
    glNormal3f(0, 0, 1);
-   for (int i = 0; i < 5; ++i)
+   for (int i = 0; i < vertexCount; ++i)
    {
-      glTexCoord2d((x[i] - minX) / width, y[i] / 1.78);
+      glTexCoord2d((x[i] - minX) / width, y[i] / 1.82);
       glVertex3d(x[i], y[i], front);
    }
    glEnd();
 
    glBegin(GL_POLYGON);
    glNormal3f(0, 0, -1);
-   for (int i = 4; i >= 0; --i)
+   for (int i = vertexCount - 1; i >= 0; --i)
    {
-      glTexCoord2d((x[i] - minX) / width, y[i] / 1.78);
+      glTexCoord2d((x[i] - minX) / width, y[i] / 1.82);
       glVertex3d(x[i], y[i], back);
    }
    glEnd();
 
    glBegin(GL_QUADS);
-   for (int i = 0; i < 5; ++i)
+   for (int i = 0; i < vertexCount; ++i)
    {
-      const int next = (i + 1) % 5;
+      const int next = (i + 1) % vertexCount;
       const double dx = x[next] - x[i];
       const double dy = y[next] - y[i];
       const double length = std::sqrt(dx * dx + dy * dy);
@@ -949,7 +954,7 @@ void drawRockTriangle(const double a[3], const double b[3], const double c[3])
 // handmade triangles. Variant changes the silhouette without separate models.
 void drawBoulder(int variant = 0)
 {
-   const int sides = 8;
+   const int sides = 10;
    double lower[sides][3];
    double upper[sides][3];
    const double top[3] =
@@ -1647,9 +1652,28 @@ void drawControlBuilding()
    // The display sits just right of the entrance, outside the building's
    // footprint, so it remains visible without blocking the access path.
    glPushMatrix();
-   glTranslated(3.50, 0, -1.02);
+   glTranslated(3.42, 0, -1.18);
    drawEnergyStatusDisplay();
    glPopMatrix();
+
+   // A shallow entrance canopy and concrete landing give the front elevation
+   // a stronger focal point without changing the building footprint.
+   SetMaterial(0.18f, 0.20f, 0.20f, 24.0f);
+   glColor3f(0.42f, 0.48f, 0.48f);
+   drawBox(0, 2.08, -2.02, 1.78, 0.12, 0.72);
+   drawBox(-0.73, 1.02, -2.22, 0.10, 2.04, 0.10);
+   drawBox( 0.73, 1.02, -2.22, 0.10, 2.04, 0.10);
+   glColor3f(0.38f, 0.39f, 0.37f);
+   drawBox(0, 0.055, -2.05, 2.05, 0.11, 1.02);
+
+   // Two warm wall lights frame the entrance and stay legible at scene scale.
+   const float warmEmission[] = {0.30f, 0.20f, 0.05f, 1.0f};
+   const float noEmission[] = {0, 0, 0, 1};
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, warmEmission);
+   glColor3f(1.0f, 0.72f, 0.20f);
+   drawBox(-0.84, 1.44, -1.79, 0.12, 0.22, 0.10);
+   drawBox( 0.84, 1.44, -1.79, 0.12, 0.22, 0.10);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
 
    ResetMaterial();
 }
@@ -1746,6 +1770,13 @@ void drawGreenhouseFrame()
       glPopMatrix();
    }
 
+   // Intermediate side rails make the pane divisions and handmade frame more
+   // apparent in inspection mode without adding dense geometry.
+   drawBox(0, 0.82, -1.42, 4.08, 0.07, 0.07);
+   drawBox(0, 0.82,  1.42, 4.08, 0.07, 0.07);
+   drawBox(-2.02, 0.82, 0, 0.07, 0.07, 2.68);
+   drawBox( 2.02, 0.82, 0, 0.07, 0.07, 2.68);
+
    glDisable(GL_TEXTURE_2D);
    ResetMaterial();
 }
@@ -1759,7 +1790,7 @@ void drawGreenhouseGlassPanels()
 
    glDisable(GL_TEXTURE_2D);
    SetMaterial(0.30f, 0.40f, 0.44f, 48.0f);
-   glColor4f(0.48f, 0.76f, 0.78f, 0.32f);
+   glColor4f(0.46f, 0.74f, 0.78f, 0.25f);
 
    // Back wall uses two broad panes.
    drawBox(-1.0, 0.82, 1.405, 1.82, 1.32, 0.035);
@@ -1768,9 +1799,9 @@ void drawGreenhouseGlassPanels()
    // The front wall leaves a centered opening occupied by a glass door.
    drawBox(-1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
    drawBox( 1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
-   glColor4f(0.40f, 0.70f, 0.74f, 0.40f);
+   glColor4f(0.40f, 0.70f, 0.74f, 0.34f);
    drawBox(0, 0.77, -1.445, 0.96, 1.34, 0.035);
-   glColor4f(0.48f, 0.76f, 0.78f, 0.32f);
+   glColor4f(0.46f, 0.74f, 0.78f, 0.25f);
 
    for (int side = -1; side <= 1; side += 2)
    {
@@ -1898,9 +1929,16 @@ void drawSolarPanel()
    drawBox( 1.15, 0.055, 0, 0.10, 0.10, 1.20);
 
    glColor3f(0.20f, 0.38f, 0.58f);
+   for (int i = -2; i <= 2; ++i)
+      drawBox(0.40 * i, 0.061, 0, 0.022, 0.018, 1.16);
    for (int i = -1; i <= 1; ++i)
-      drawBox(0.52 * i, 0.061, 0, 0.025, 0.018, 1.16);
-   drawBox(0, 0.061, 0, 2.16, 0.018, 0.025);
+      drawBox(0, 0.061, 0.31 * i, 2.16, 0.018, 0.022);
+
+   // A dark rear junction box and short cable make the panel read as working
+   // equipment when viewed from behind during orbit inspection.
+   glColor3f(0.10f, 0.12f, 0.13f);
+   drawBox(0, -0.075, 0.12, 0.42, 0.10, 0.30);
+   drawBox(0.18, -0.13, 0.34, 0.08, 0.16, 0.28);
 
    glPopMatrix();
 
@@ -2441,8 +2479,8 @@ void drawEllipsoidVertex(double latitude, double longitude,
 // Draw a deliberately low-poly handmade ellipsoid without imported geometry.
 void drawLowPolyEllipsoid(double radiusX, double radiusY, double radiusZ)
 {
-   const int slices = 10;
-   const int stacks = 6;
+   const int slices = 12;
+   const int stacks = 8;
    for (int stack = 0; stack < stacks; ++stack)
    {
       const double latitude0 = -90.0 + 180.0 * stack / stacks;
@@ -2637,6 +2675,17 @@ void drawMaintenanceWorker()
    drawBox( 0.14, 2.43, 0.291, 0.07, 0.07, 0.025);
 
    drawWorkerHardHat();
+
+   // A compact handheld inspection tablet reinforces the maintenance role and
+   // improves the worker silhouette without introducing animation.
+   glColor3f(0.10f, 0.12f, 0.14f);
+   glPushMatrix();
+   glTranslated(0.48, 1.28, 0.32);
+   glRotated(-12, 0, 0, 1);
+   drawBox(0, 0, 0, 0.34, 0.46, 0.06);
+   glColor3f(0.18f, 0.48f, 0.62f);
+   drawBox(0, 0.02, 0.035, 0.26, 0.34, 0.018);
+   glPopMatrix();
 
    ResetMaterial();
 }
@@ -2973,15 +3022,15 @@ void drawWindRibbons()
         inspectionMode != INSPECT_TURBINE))
       return;
 
-   const int ribbonCount = 8;
+   const int ribbonCount = 6;
    const int segmentCount = 44;
    const double ribbonZ[ribbonCount] =
    {
-      -2.65, -1.90, -1.15, -0.35, 0.45, 1.20, 2.00, 2.75
+      -2.45, -1.45, -0.35, 0.70, 1.70, 2.65
    };
    const double ribbonY[ribbonCount] =
    {
-      1.55, 2.20, 2.78, 1.82, 2.55, 3.10, 2.00, 2.72
+      1.62, 2.28, 2.82, 1.92, 2.62, 3.02
    };
 
    GLint previousProgram = 0;
@@ -3037,12 +3086,13 @@ void drawWindRibbons()
    }
 
    glPushMatrix();
-   glTranslated(windZoneX, 0, windZoneZ);
+   if (inspectionMode == INSPECT_FULL_SCENE)
+      glTranslated(windZoneX, 0, windZoneZ);
    for (int ribbon = 0; ribbon < ribbonCount; ++ribbon)
    {
       const double ribbonPhase = 0.91 * ribbon;
       const double centerY = ribbonY[ribbon];
-      const double halfWidth = 0.045 + 0.008 * (ribbon % 3);
+      const double halfWidth = 0.050 + 0.008 * (ribbon % 3);
       const double speedRatio = windSpeed / maxWindSpeed;
       const double fallbackAmplitudeY = 0.045 + 0.022 * windSpeed;
       const double fallbackAmplitudeZ = 0.035 + 0.016 * windSpeed;
@@ -3051,13 +3101,17 @@ void drawWindRibbons()
 
       // Shader alpha is interpreted in wind.frag; the CPU fallback uses the
       // same subtle base opacity directly through fixed-pipeline blending.
-      glColor4f(0.50f, 0.78f, 0.94f, shaderActive ? 0.24f : 0.18f);
+      glColor4f(0.50f, 0.78f, 0.94f, shaderActive ? 0.27f : 0.21f);
       glBegin(GL_QUAD_STRIP);
       for (int segment = 0; segment <= segmentCount; ++segment)
       {
          const double along =
             static_cast<double>(segment) / segmentCount;
-         const double x = -7.4 + 15.4 * along;
+         const double ribbonStart =
+            inspectionMode == INSPECT_FULL_SCENE ? -7.4 : -4.4;
+         const double ribbonLength =
+            inspectionMode == INSPECT_FULL_SCENE ? 15.4 : 8.8;
+         const double x = ribbonStart + ribbonLength * along;
          const double laneCurve =
             0.11 * std::sin(3.1415927 * along + 0.45 * ribbonPhase);
          double y = centerY;
@@ -3085,7 +3139,7 @@ void drawWindRibbons()
                std::fmax(0.0, std::fmin(1.0, (1.0 - along) / 0.14));
             endFade = startFade * finishFade;
             glColor4f(0.50f, 0.78f, 0.94f,
-                      static_cast<float>(0.18 * endFade));
+                      static_cast<float>(0.21 * endFade));
          }
 
          glTexCoord2d(along, ribbonPhase);
@@ -3225,7 +3279,7 @@ void drawProjectedShadows(const float lightPosition[4])
    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
    glEnable(GL_POLYGON_OFFSET_FILL);
    glPolygonOffset(-1.0f, -1.0f);
-   glColor4f(0.015f, 0.020f, 0.025f, 0.22f);
+   glColor4f(0.015f, 0.020f, 0.025f, 0.14f);
    glBegin(GL_QUADS);
    glNormal3f(0, 1, 0);
    glVertex3d(-terrainHalfSize, 0.028, -terrainHalfSize);
@@ -3349,6 +3403,10 @@ void drawTransparentPass()
    {
       drawInspectionModel(true);
    }
+   else if (inspectionMode == INSPECT_TURBINE)
+   {
+      drawWindRibbons();
+   }
 }
 
 // Draw a visible marker at the moving positional light source.
@@ -3371,8 +3429,8 @@ void drawLightMarker(double x, double y, double z)
 // Configure the fixed-pipeline positional light and material defaults.
 void ConfigureLighting(const float position[4])
 {
-   const float ambientLight[] = {0.20f, 0.20f, 0.22f, 1.0f};
-   const float diffuseLight[] = {0.82f, 0.78f, 0.68f, 1.0f};
+   const float ambientLight[] = {0.28f, 0.29f, 0.31f, 1.0f};
+   const float diffuseLight[] = {0.86f, 0.82f, 0.73f, 1.0f};
    const float specularLight[] = {0.45f, 0.43f, 0.38f, 1.0f};
    const float materialAmbient[] = {0.25f, 0.25f, 0.25f, 1.0f};
    const float materialDiffuse[] = {0.80f, 0.80f, 0.80f, 1.0f};
@@ -3509,26 +3567,36 @@ void display()
    glPushMatrix();
    glLoadIdentity();
 
-   glColor3f(1, 1, 1);
-   char sceneText[180];
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glColor4f(0.025f, 0.035f, 0.045f, 0.82f);
+   glBegin(GL_QUADS);
+   glVertex2i(6, 6);
+   glVertex2i(620, 6);
+   glVertex2i(620, 62);
+   glVertex2i(6, 62);
+   glEnd();
+   glDisable(GL_BLEND);
+
+   glColor3f(0.94f, 0.97f, 0.98f);
+   char sceneText[200];
    std::snprintf(sceneText, sizeof(sceneText),
-                 "View %d/8: %s   Camera: %s",
+                 "View %d/8: %s | %s",
                  inspectionMode, InspectionName(), ModeName());
 
-   char windText[180];
+   char windText[220];
    std::snprintf(windText, sizeof(windText),
-                 "Wind: %.2f   Shader: %s   Ribbons: %s   Shadows: %s",
+                 "Wind %.2f | Shader %s | Ribbons %s | Fog %s | Shadows %s",
                  windSpeed, useShader && windProgram ? "On" : "Off / fallback",
                  showRibbons ? "On" : "Off",
+                 fogEnabled ? "On" : "Off",
                  shadowsEnabled ? "On" : "Off");
 
-   DrawText(10, 54,
-            "Shader-Based Renewable Energy Farm - Gunabhiram Aruru");
-   DrawText(10, 43, sceneText);
-   DrawText(10, 32, windText);
-   DrawText(10, 21, "0: full scene  1-8: inspect object  m: camera");
-   DrawText(10, 10,
-            "p: shader  v: ribbons  h: shadows  q/ESC: quit");
+   DrawText(12, 48, sceneText);
+   DrawText(12, 35, windText);
+   DrawText(12, 22,
+            "0 full | 1-8 inspect | [ ] wind | m camera | p shader | v ribbons");
+   DrawText(12, 9, "f fog | g glass | h shadows | R reset | q/ESC quit");
    DrawInspectionLabel();
 
    glPopMatrix();
@@ -3560,9 +3628,9 @@ void SetInspectionMode(int selectedMode)
    inspectionMode = selectedMode;
    mode = ORBIT_MODE;
    const InspectionPreset& preset = inspectionPresets[inspectionMode];
-   viewTargetX = 0;
+   viewTargetX = preset.targetX;
    viewTargetY = preset.targetY;
-   viewTargetZ = 0;
+   viewTargetZ = preset.targetZ;
    th = preset.azimuth;
    ph = preset.elevation;
    dim = preset.cameraDistance;
@@ -3579,14 +3647,14 @@ void ResetCamera()
    eyeZ = 42;
    fpYaw = 0;
    fpPitch = 0;
-   th = 35;
-   ph = 30;
+   th = inspectionPresets[INSPECT_FULL_SCENE].azimuth;
+   ph = inspectionPresets[INSPECT_FULL_SCENE].elevation;
    dim = inspectionPresets[INSPECT_FULL_SCENE].cameraDistance;
-   viewTargetX = 0;
-   viewTargetY = 1;
-   viewTargetZ = 0;
-   lightAngle = 90;
-   lightHeight = 25;
+   viewTargetX = inspectionPresets[INSPECT_FULL_SCENE].targetX;
+   viewTargetY = inspectionPresets[INSPECT_FULL_SCENE].targetY;
+   viewTargetZ = inspectionPresets[INSPECT_FULL_SCENE].targetZ;
+   lightAngle = 48;
+   lightHeight = 30;
 }
 
 // Start first-person mode at the currently displayed orbit eye and point it at
@@ -3954,7 +4022,7 @@ int main(int argc, char* argv[])
    glutMotionFunc(motion);
    glutIdleFunc(idle);
 
-   glClearColor(0.07f, 0.09f, 0.12f, 1.0f);
+   glClearColor(fogColor[0], fogColor[1], fogColor[2], 1.0f);
    // The depth test makes nearer solid surfaces hide farther surfaces.
    glEnable(GL_DEPTH_TEST);
    glEnable(GL_NORMALIZE);

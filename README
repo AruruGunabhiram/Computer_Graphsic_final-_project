@@ -8,11 +8,10 @@ CSCI 4229/5229 Computer Graphics
 2. Project Review Note
 ----------------------
 
-This is the Project Review (almost-final milestone build). The program is
-intended to compile and run as submitted so the instructor can evaluate whether
-the project is on track. The final submission will focus on Project Review
-feedback, visual polish, code cleanup, shader/wind refinement, and final
-packaging.
+This is the final polished submission build. It retains the Project Review
+scope and design while incorporating feedback-driven improvements to startup
+composition, the Control Center, handmade geometry, inspection views,
+wind-flow presentation, lighting, transparency, and HUD readability.
 
 3. Short Project Description
 ----------------------------
@@ -58,9 +57,9 @@ visualization, not a simulation-heavy game.
   fallback if the shader is disabled or unavailable.
 - Transparent greenhouse glass rendered in a separate blended pass with depth
   writes disabled.
-- Optional stencil-masked planar shadows for turbines, the Control Center,
+- Subtle optional stencil-masked planar shadows for turbines, the Control Center,
   greenhouse, solar panels, sheep, and the maintenance worker.
-- Optional linear distance fog, disabled at startup.
+- Optional subtle linear distance fog, disabled at startup.
 - Texture, lighting, glass, ribbon, shader, fog, axes, and animation toggles.
 - On-screen HUD showing the selected object, camera mode, wind speed, shader
   status, ribbon status, and important review controls.
@@ -81,8 +80,9 @@ normalized to 0-1 using these simple formulas:
     solar = clamp(sin(lightAngle))
     battery = clamp(0.15 + 0.45*turbine + 0.40*solar)
 
-The existing Control Center inspection mode also shows the display; its camera
-distance was widened slightly so both objects fit comfortably.
+The Control Center inspection mode shows the building, entrance canopy, wall
+lights, and status display together; its target and camera distance are framed
+so the complete frontage fits comfortably.
 
 5. Original Contribution
 ------------------------
@@ -100,21 +100,17 @@ The same value also drives the weather-station anemometer. The GLSL ribbons and
 their fixed-pipeline fallback use the same wind-speed control so the central
 visual response remains available if shader compilation is unsupported.
 
-6. Final Submission Upgrade Plan
---------------------------------
+6. Final Polish Summary
+-----------------------
 
-For the final submission, I am not just adding more objects. This Project
-Review build is already a shader-based renewable-energy visualization. The
-final version will further refine the animated GLSL wind-flow ribbons, the
-wind-speed connection to turbine motion, object inspection views, normals and
-materials, transparent greenhouse glass, and fog. A simple projected-shadow
-feature may be added only if it is stable. The goal is to show the graphics
-techniques from the course clearly rather than overbuilding unrelated
-simulation logic.
-
-This Project Review version is close to final, but the remaining work is
-focused on polish, feedback response, and making the shader/wind visualization
-clearer.
+The final pass improves the initial full-farm composition and brighter outdoor
+lighting, reduces projected-shadow weight, adds a compact high-contrast HUD,
+and gives every inspection object an individually tuned target and distance.
+Visible handmade refinements include smoother tapered turbine blades, denser
+solar cell divisions and rear electrical detail, clearer greenhouse framing,
+a stronger Control Center entrance, smoother organic forms, a worker tablet,
+and more rounded irregular boulders. Wind ribbons use fewer, clearer lanes and
+remain available in turbine inspection with the fixed-pipeline fallback.
 
 7. Build and Run Instructions
 -----------------------------
@@ -134,13 +130,13 @@ against GLUT, GLU, OpenGL, and libm. Linux builds may optionally use GLEW with:
 
     make USEGLEW=1
 
-The Project Review build was verified with a clean warning-free build using
+The final build was verified with a clean warning-free build using
 g++ -std=c++11 -Wall -Wextra on macOS.
 
 8. Controls
 -----------
 
-Important Project Review controls:
+Important controls:
 
     0                 Return to the complete farm
     1                 Inspect one wind turbine
@@ -187,38 +183,16 @@ The overhead camera is a fixed orthographic overview. Orbit rotation and zoom
 controls apply only in orbit mode, and first-person movement is constrained to
 the farm boundary.
 
-9. What Remains Before Final Submission
----------------------------------------
+9. Final Submission Notes
+-------------------------
 
-This Project Review version is intended to be close to the final project. The
-remaining work is mainly polish, feedback response, and final cleanup rather
-than a full redesign.
-
-Planned final work:
-
-1. Address any feedback from the Project Review submission.
-
-2. Polish object geometry, normals, and texture coordinates, especially on the
-   wind turbines, solar panels, trees, and greenhouse.
-
-3. Tune the animated wind/shader visualization and keep the fixed-pipeline
-   fallback working.
-
-4. Refine the wind-speed response so its effect on turbine blade speed and
-   wind-flow animation is immediately visible.
-
-5. Improve transparency draw order and fog/light settings for a cleaner
-   outdoor scene.
-
-6. Refine object inspection views so each major handmade object is easy to
-   review.
-
-7. Add one final polish feature only if stable: simple projected shadows, a
-   weather/time mode, improved curved turbine blade geometry, or a comparable
-   small visual improvement.
-
-8. Perform the final submission audit: clean build, no warnings, no unrelated
-   files, correct texture/shader filenames, README updated, and clean ZIP only.
+- The startup camera is the intended full-scene presentation view.
+- Fog remains off by default and is intentionally subtle when enabled.
+- Greenhouse glass is still rendered after opaque geometry with depth testing
+  enabled and depth writes disabled.
+- Projected shadows remain optional and use a restrained opacity.
+- Wind shader failure remains non-fatal because the CPU fallback uses the same
+  wind-speed control and animated path.
 
 10. Code Reuse / References / AI Disclosure
 ------------------------------------------
@@ -251,8 +225,8 @@ Expected additional time before final submission: approximately 6 hours.
 12. Known Limitations
 ---------------------
 
-- Some visual effects, especially wind-ribbon visibility, fog, materials, and
-  transparency, may be tuned further before the final submission.
+- Wind ribbons are intentionally restrained at scene scale and are easiest to
+  review in turbine inspection mode.
 - Shader mode has a fixed-pipeline fallback if GLSL compilation or linking is
   unsupported.
 - Transparent geometry is separated into later render passes but is not sorted
@@ -264,4 +238,3 @@ Expected additional time before final submission: approximately 6 hours.
   detection.
 - Energy-display values are intentionally illustrative and are not calibrated
   power, weather, or battery measurements.
-- Final Project Review feedback will guide the last polish pass.
