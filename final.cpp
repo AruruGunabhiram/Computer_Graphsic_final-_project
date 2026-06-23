@@ -2075,6 +2075,181 @@ void drawWeatherStation()
    ResetMaterial();
 }
 
+// Draw a handmade vertical cylinder with explicit side and cap normals.
+// This is used for the windsock pole instead of GLUT/GLU solid primitives.
+void drawVerticalCylinder(double radius, double height, int sides)
+{
+   glBegin(GL_QUAD_STRIP);
+   for (int side = 0; side <= sides; ++side)
+   {
+      const double angle = 360.0 * side / sides;
+      glNormal3d(Cos(angle), 0, Sin(angle));
+      glVertex3d(radius * Cos(angle), 0, radius * Sin(angle));
+      glVertex3d(radius * Cos(angle), height, radius * Sin(angle));
+   }
+   glEnd();
+
+   glBegin(GL_POLYGON);
+   glNormal3f(0, -1, 0);
+   for (int side = sides - 1; side >= 0; --side)
+   {
+      const double angle = 360.0 * side / sides;
+      glVertex3d(radius * Cos(angle), 0, radius * Sin(angle));
+   }
+   glEnd();
+
+   glBegin(GL_POLYGON);
+   glNormal3f(0, 1, 0);
+   for (int side = 0; side < sides; ++side)
+   {
+      const double angle = 360.0 * side / sides;
+      glVertex3d(radius * Cos(angle), height, radius * Sin(angle));
+   }
+   glEnd();
+}
+
+// Draw a handmade torus-like support ring in the YZ plane. The windsock opens
+// toward +X, matching the west-to-east direction used by drawWindRibbons().
+void drawWindsockRing(double majorRadius, double tubeRadius)
+{
+   const int ringSegments = 16;
+   const int tubeSegments = 6;
+
+   for (int ring = 0; ring < ringSegments; ++ring)
+   {
+      const double ringAngle0 = 360.0 * ring / ringSegments;
+      const double ringAngle1 = 360.0 * (ring + 1) / ringSegments;
+
+      glBegin(GL_QUAD_STRIP);
+      for (int tube = 0; tube <= tubeSegments; ++tube)
+      {
+         const double tubeAngle = 360.0 * tube / tubeSegments;
+         const double radialOffset = tubeRadius * Cos(tubeAngle);
+         const double x = tubeRadius * Sin(tubeAngle);
+
+         const double normalX = Sin(tubeAngle);
+         const double normalRadius = Cos(tubeAngle);
+
+         glNormal3d(normalX,
+                    normalRadius * Cos(ringAngle0),
+                    normalRadius * Sin(ringAngle0));
+         glVertex3d(x,
+                    (majorRadius + radialOffset) * Cos(ringAngle0),
+                    (majorRadius + radialOffset) * Sin(ringAngle0));
+
+         glNormal3d(normalX,
+                    normalRadius * Cos(ringAngle1),
+                    normalRadius * Sin(ringAngle1));
+         glVertex3d(x,
+                    (majorRadius + radialOffset) * Cos(ringAngle1),
+                    (majorRadius + radialOffset) * Sin(ringAngle1));
+      }
+      glEnd();
+   }
+}
+
+// Draw an origin-centered weather windsock. windSpeed controls three simple
+// visual cues: stronger wind extends the fabric farther along +X, removes most
+// of its gravity droop, and increases elapsed-time flapping frequency/amplitude.
+// This deliberately avoids cloth physics while remaining visibly coupled to
+// the same windSpeed value that drives turbines, ribbons, and the anemometer.
+void drawWindsock()
+{
+   const int fabricSegments = 9;
+   const int radialSegments = 12;
+   const double elapsedSeconds =
+      static_cast<double>(glutGet(GLUT_ELAPSED_TIME)) / 1000.0;
+   const double speedRatio =
+      std::fmax(0.0, std::fmin(1.0, windSpeed / maxWindSpeed));
+   const double extension = 0.90 + 2.15 * speedRatio;
+   const double droop = 1.20 * (1.0 - speedRatio) * (1.0 - speedRatio) + 0.06;
+   const double flapAmplitude = 0.012 + 0.070 * speedRatio;
+   const double flapFrequency = 1.4 + 2.8 * speedRatio;
+   const double ringHeight = 3.75;
+   double centerX[fabricSegments + 1];
+   double centerY[fabricSegments + 1];
+   double centerZ[fabricSegments + 1];
+   double radius[fabricSegments + 1];
+
+   glDisable(GL_TEXTURE_2D);
+
+   SetMaterial(0.36f, 0.38f, 0.40f, 36.0f);
+   glColor3f(0.42f, 0.45f, 0.46f);
+   drawBox(0, 0.08, 0, 0.72, 0.16, 0.72);
+   drawVerticalCylinder(0.075, ringHeight, 12);
+
+   // A short horizontal spindle separates the freely turning ring from pole.
+   glPushMatrix();
+   glTranslated(0.10, ringHeight, 0);
+   glRotated(-90, 0, 0, 1);
+   drawVerticalCylinder(0.055, 0.22, 10);
+   glPopMatrix();
+
+   glPushMatrix();
+   glTranslated(0.38, ringHeight, 0);
+   drawWindsockRing(0.38, 0.035);
+   glPopMatrix();
+
+   for (int segment = 0; segment <= fabricSegments; ++segment)
+   {
+      const double along =
+         static_cast<double>(segment) / fabricSegments;
+      const double anchoredFlap = along * along;
+      const double phase =
+         elapsedSeconds * flapFrequency * 2.0 * 3.1415927 -
+         along * (5.0 + 2.0 * speedRatio);
+
+      centerX[segment] = 0.40 + extension * along;
+      centerY[segment] =
+         ringHeight - droop * along * along +
+         flapAmplitude * 0.55 * anchoredFlap * std::sin(phase * 0.83);
+      centerZ[segment] =
+         flapAmplitude * anchoredFlap * std::sin(phase);
+      radius[segment] = 0.35 - 0.23 * along;
+   }
+
+   SetMaterial(0.08f, 0.07f, 0.06f, 10.0f);
+   for (int segment = 0; segment < fabricSegments; ++segment)
+   {
+      if ((segment / 2) % 2 == 0)
+         glColor3f(0.72f, 0.16f, 0.10f);
+      else
+         glColor3f(0.82f, 0.78f, 0.66f);
+
+      const double dx = centerX[segment + 1] - centerX[segment];
+      const double dy = centerY[segment + 1] - centerY[segment];
+      const double dz = centerZ[segment + 1] - centerZ[segment];
+      const double radiusSlope = radius[segment + 1] - radius[segment];
+
+      glBegin(GL_QUAD_STRIP);
+      for (int side = 0; side <= radialSegments; ++side)
+      {
+         const double angle = 360.0 * side / radialSegments;
+         const double cosine = Cos(angle);
+         const double sine = Sin(angle);
+         double nx = -(cosine * dy + sine * dz + radiusSlope);
+         double ny = cosine * dx;
+         double nz = sine * dx;
+         const double normalLength = std::sqrt(nx * nx + ny * ny + nz * nz);
+         nx /= normalLength;
+         ny /= normalLength;
+         nz /= normalLength;
+
+         glNormal3d(nx, ny, nz);
+         glVertex3d(centerX[segment],
+                    centerY[segment] + radius[segment] * cosine,
+                    centerZ[segment] + radius[segment] * sine);
+         glNormal3d(nx, ny, nz);
+         glVertex3d(centerX[segment + 1],
+                    centerY[segment + 1] + radius[segment + 1] * cosine,
+                    centerZ[segment + 1] + radius[segment + 1] * sine);
+      }
+      glEnd();
+   }
+
+   ResetMaterial();
+}
+
 // Emit one vertex and its ellipsoid normal for the handmade low-poly body.
 void drawEllipsoidVertex(double latitude, double longitude,
                          double radiusX, double radiusY, double radiusZ)
@@ -2304,6 +2479,13 @@ void drawFarmCharactersAndInstruments()
    // Sited beside the turbine access road for representative wind readings.
    glTranslated(-15.0, 0, -9.0);
    drawWeatherStation();
+   glPopMatrix();
+
+   glPushMatrix();
+   // The windsock stands beside the weather station, clear of its sensors.
+   // Its +X fabric direction matches the west-to-east wind-flow ribbons.
+   glTranslated(-12.6, 0, -9.0);
+   drawWindsock();
    glPopMatrix();
 
    glPushMatrix();
