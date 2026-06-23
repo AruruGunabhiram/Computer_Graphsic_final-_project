@@ -1,161 +1,73 @@
-1. Project Title and Author
-===========================
+Shader-Based Renewable Energy Farm Visualization
+=================================================
 
-Final Project: Interactive Renewable Energy Farm Visualization
-Gunabhiram Aruru
-CSCI 4229/5229 Computer Graphics
+Author: Gunabhiram Aruru
+Course: CSCI 4229/5229 Computer Graphics
 
-2. Project Review Note
-----------------------
+Project Description
+-------------------
 
-This is the final polished submission build. It retains the Project Review
-scope and design while incorporating feedback-driven improvements to startup
-composition, the Control Center, handmade geometry, inspection views,
-wind-flow presentation, lighting, transparency, and HUD readability.
+This project is an interactive renewable-energy farm visualization written in
+C++ using compatibility-profile OpenGL and GLUT. The scene combines wind
+turbines, solar panels, energy storage, a Control Center, a greenhouse,
+electrical infrastructure, a weather station, livestock, vegetation, terrain,
+and other farm details. The models are constructed from handmade OpenGL
+geometry rather than imported 3D models.
 
-3. Short Project Description
-----------------------------
+Original Contribution
+---------------------
 
-This project is an interactive renewable-energy farm built in compatibility-
-profile OpenGL from handmade geometry rather than imported 3D models. The scene
-contains wind turbines, textured terrain and access paths, a farmhouse-style
-control building, fences, trees, solar panels, a transparent greenhouse,
-battery/inverter storage, an electrical substation and power lines, a weather
-station, rocks, crop rows, a sheep paddock, and a maintenance worker.
+The main project-specific contribution is a shader-based visualization of wind
+flow using animated translucent ribbons. A shared `windSpeed` value controls:
 
-The project emphasizes graphics techniques from the course: handmade geometry
-and normals, transformations and reusable models, perspective and orthographic
-projections, orbit and first-person navigation, positional lighting, material
-response, texture mapping, alpha blending, fog, GLSL shaders, fixed-pipeline
-fallback rendering, animation, and object inspection. It is a graphics
-visualization, not a simulation-heavy game.
+- turbine blade rotation speed;
+- wind-ribbon travel, frequency, and displacement;
+- the weather-station anemometer; and
+- the windsock's lift, extension, and flutter.
 
-4. Current Implemented Features
--------------------------------
+The project also provides dedicated inspection modes for major handmade
+objects. Each inspection mode reuses the scene model and presents it over a
+neutral grid with an individually tuned camera view.
 
-- Handmade 3D renewable-energy farm scene with no imported 3D models.
-- Three wind turbines with frame-rate-independent animated blades.
-- Shared wind-speed control affecting turbine blades, weather-station
-  anemometer motion, and wind-flow animation.
-- Textured grass terrain, paths, building walls and roofs, turbine and utility
-  metal, fences and doors, trees, and handmade boulders.
-- Nine handmade solar-panel assemblies, battery/inverter storage, an electrical
-  substation, power poles, and connecting lines.
-- Farmhouse-style control building, greenhouse, crop rows, fences, trees,
-  sheep paddock, weather station, and maintenance worker.
-- Handmade Energy Status Display beside the Control Center, with bright
-  polygon meters for wind, turbine, solar, and battery status.
-- Moving positional sun/light with manual angle and height controls.
-- Different material response for metal, solar panels, building surfaces,
-  glass, rocks, animals, and the worker.
-- Perspective orbit camera with keyboard and mouse rotation and zoom.
-- First-person camera with movement, keyboard look, and mouse look.
-- Fixed orthographic overhead overview mode.
-- Object inspection modes for a turbine, control building, greenhouse, solar
-  panel, battery/inverter unit, sheep, worker, and boulder cluster.
-- GLSL 1.20 animated wind-flow ribbons with a CPU-animated fixed-pipeline
-  fallback if the shader is disabled or unavailable.
-- Transparent greenhouse glass rendered in a separate blended pass with depth
-  writes disabled.
-- Subtle optional stencil-masked planar shadows for turbines, the Control Center,
-  greenhouse, solar panels, sheep, and the maintenance worker.
-- Optional subtle linear distance fog, disabled at startup.
-- Texture, lighting, glass, ribbon, shader, fog, axes, and animation toggles.
-- On-screen HUD showing the selected object, camera mode, wind speed, shader
-  status, ribbon status, and important review controls.
+The project began with my Homework 3 foundation, but the final scene expands
+substantially beyond that assignment through new handmade geometry, a larger
+farm layout, additional energy and farm objects, shader animation, object
+inspection, transparency, fog, materials, textures, and optional shadows.
 
-Energy Status Display:
+Build and Run
+-------------
 
-The freestanding dark display beside the Control Center is made entirely from
-handmade box/polygon geometry. Its four icon-coded rows are, from top to bottom:
-wind speed (stream strips), turbine output (rotor), solar output (panel grid),
-and battery charge (cabinet). No dashboard information is duplicated in the
-HUD except the existing wind-speed value.
-
-The display is a visualization prop, not a real energy simulation. Values are
-normalized to 0-1 using these simple formulas:
-
-    wind = clamp(windSpeed / 5.0)
-    turbine = wind^1.5
-    solar = clamp(sin(lightAngle))
-    battery = clamp(0.15 + 0.45*turbine + 0.40*solar)
-
-The Control Center inspection mode shows the building, entrance canopy, wall
-lights, and status display together; its target and camera distance are framed
-so the complete frontage fits comfortably.
-
-5. Original Contribution
-------------------------
-
-My original contribution is an interactive renewable-energy visualization built
-from handmade geometry, with object inspection and an animated wind/turbine
-response layer. The goal is not only to place objects in a scene, but to make
-the energy farm visually inspectable and interactive through camera modes,
-animated turbine motion, lighting/material response, textures, transparency,
-and shader/fallback visualization.
-
-The main project-specific contribution is the animated wind-flow visualization,
-where wind speed affects both the visual wind layer and turbine blade motion.
-The same value also drives the weather-station anemometer. The GLSL ribbons and
-their fixed-pipeline fallback use the same wind-speed control so the central
-visual response remains available if shader compilation is unsupported.
-
-6. Final Polish Summary
------------------------
-
-The final pass improves the initial full-farm composition and brighter outdoor
-lighting, reduces projected-shadow weight, adds a compact high-contrast HUD,
-and gives every inspection object an individually tuned target and distance.
-Visible handmade refinements include smoother tapered turbine blades, denser
-solar cell divisions and rear electrical detail, clearer greenhouse framing,
-a stronger Control Center entrance, smoother organic forms, a worker tablet,
-and more rounded irregular boulders. Wind ribbons use fewer, clearer lanes and
-remain available in turbine inspection with the fixed-pipeline fallback.
-
-7. Build and Run Instructions
------------------------------
-
-Run these commands from the project directory:
+From the project directory, run:
 
     make clean
     make
     ./final
 
-The executable target is named final. Keep wind.vert, wind.frag, and the
-textures directory in their submitted locations because the program loads them
-using relative paths at runtime.
+Keep `wind.vert`, `wind.frag`, and the `textures` directory beside the
+executable because they are loaded with relative paths at runtime.
 
-The Makefile uses the OpenGL and GLUT frameworks on macOS. On Linux it links
-against GLUT, GLU, OpenGL, and libm. Linux builds may optionally use GLEW with:
+The Makefile links the OpenGL and GLUT frameworks on macOS. On Linux, it links
+GLUT, GLU, OpenGL, and libm; GLEW can be enabled with `make USEGLEW=1`.
 
-    make USEGLEW=1
+Controls
+--------
 
-The final build was verified with a clean warning-free build using
-g++ -std=c++11 -Wall -Wextra on macOS.
-
-8. Controls
------------
-
-Important controls:
+Object inspection:
 
     0                 Return to the complete farm
-    1                 Inspect one wind turbine
+    1                 Inspect a wind turbine
     2                 Inspect the Control Center
     3                 Inspect the greenhouse
-    4                 Inspect one solar panel
-    5                 Inspect the battery / inverter storage unit
-    6                 Inspect one sheep
+    4                 Inspect a solar panel
+    5                 Inspect the battery / inverter unit
+    6                 Inspect a sheep
     7                 Inspect the maintenance worker
-    8                 Inspect a handmade boulder cluster
-    m or M            Cycle orbit, first-person, and overhead cameras
-    [ / ]             Decrease / increase wind speed
-    p or P            Toggle GLSL wind shader / fixed-pipeline fallback
-    v or V            Toggle wind-flow ribbons
-    R                 Reset the full-scene camera and light position
+    8                 Inspect the boulder cluster
 
-Camera and movement:
+Camera:
 
-    Arrow keys        Rotate the orbit camera or look in first-person mode
+    m or M            Cycle orbit, first-person, and overhead modes
+    Arrow keys        Rotate orbit view or look in first-person mode
     W / S             Move forward / backward in first-person mode
     A / D             Strafe left / right in first-person mode
     Page Up/Down      Zoom in / out in orbit mode
@@ -163,78 +75,100 @@ Camera and movement:
     - or _            Zoom out in orbit mode
     Left mouse drag   Rotate orbit view or look in first-person mode
     Mouse wheel       Zoom in / out in orbit mode
+    R                 Reset the full-scene camera and light position
 
-Lighting, rendering, and animation:
+Wind and animation:
 
+    [ / ]             Decrease / increase wind speed from 0.0 to 5.0
     r                 Pause / resume turbine blade animation
+    v or V            Toggle wind-flow ribbons
+    p or P            Toggle the GLSL wind shader / CPU fallback
     Space             Pause / resume automatic sun movement
+
+Lighting and rendering:
+
     , / .             Move the sun angle backward / forward
     < / >             Lower / raise the sun
     l or L            Toggle lighting
-    f or F            Toggle distance fog
-    h or H            Toggle projected ground shadows
     t or T            Toggle textures
     g or G            Toggle greenhouse glass
+    f or F            Toggle linear distance fog
+    h or H            Toggle projected ground shadows
     a or A            Toggle axes outside first-person mode
-                      (A strafes left while in first-person mode)
+                      (A strafes left in first-person mode)
+
+Program:
+
     q, Q, or ESC      Exit
 
-The overhead camera is a fixed orthographic overview. Orbit rotation and zoom
-controls apply only in orbit mode, and first-person movement is constrained to
-the farm boundary.
+The overhead mode is a fixed orthographic overview. Orbit zoom controls do not
+change the overhead or first-person cameras. First-person movement is limited
+to the farm boundary.
 
-9. Final Submission Notes
--------------------------
+Professor-Feedback Response
+---------------------------
 
-- The startup camera is the intended full-scene presentation view.
-- Fog remains off by default and is intentionally subtle when enabled.
-- Greenhouse glass is still rendered after opaque geometry with depth testing
-  enabled and depth writes disabled.
-- Projected shadows remain optional and use a restrained opacity.
-- Wind shader failure remains non-fatal because the CPU fallback uses the same
-  wind-speed control and animated path.
+The Control Center entrance and windows were rebuilt to provide clearer depth,
+framing, and visual detail. The entrance now has an inset textured door,
+panels, a metal frame and handle, a canopy, a landing, and wall lights. Front
+and side windows now include dark backing, glass-colored panes, perimeter
+frames, and mullions.
 
-10. Code Reuse / References / AI Disclosure
-------------------------------------------
+These door and window surfaces are close to the building walls. The
+implementation applies `glPolygonOffset` only while drawing those facade
+overlays, preventing z-fighting without affecting the rest of the scene.
 
-Camera and projection code, GLUT setup, BMP texture loading, lighting patterns,
-and shader-loading structure are based on previous assignments and class
-examples where applicable.
+Implemented Features
+--------------------
 
-This project is a large extension of my Homework 3 project, with new and
-expanded geometry, object inspection, larger scene composition, animation,
-shader/fallback visualization, transparency, fog, README cleanup, and final
-polish.
+- Handmade scene geometry with no imported 3D models.
+- Three animated wind turbines and six shader-driven wind ribbons.
+- Textured terrain, roads, buildings, metal equipment, fences, trees, and
+  boulders using nine BMP textures.
+- Solar arrays, battery/inverter storage, a substation, power poles and lines,
+  a greenhouse, a weather station, a windsock, crop rows, sheep, a worker, and
+  an Energy Status Display.
+- Positional lighting, surface normals, and object-specific material response.
+- Transparent greenhouse glass and wind ribbons using alpha blending, depth
+  testing, and disabled depth writes during transparent passes.
+- Optional linear distance fog, disabled at startup.
+- GLSL 1.20 vertex and fragment shaders for wind-flow animation.
+- CPU-animated fixed-pipeline wind-ribbon fallback when the shader is disabled
+  or cannot compile or link.
+- Orbit, first-person, fixed overhead, and eight object-inspection views.
+- Optional stencil-masked planar shadows for turbines, the Control Center,
+  greenhouse frame, solar panels, sheep, and the maintenance worker.
+- HUD status for camera/inspection mode, wind speed, shader/fallback state,
+  ribbons, fog, and shadows.
 
-Some texture images are external reference assets. The submitted textures are
-used on handmade geometry; no external 3D models are used.
+Reuse, References, and AI Disclosure
+------------------------------------
 
-AI Assistance:
-AI tools were used as a support tool for planning, debugging, audit checklists,
-README wording, refactoring suggestions, and small code-pattern suggestions. I
-reviewed, tested, and modified the code before submission. The submitted
-program reflects my own integration, debugging, scene design decisions, OpenGL
-state management, and final implementation choices.
+This project reuses my previous assignment foundation, including portions of
+the camera, projection, GLUT setup, and general scene structure. Course
+examples were referenced for OpenGL patterns including texture loading,
+lighting, shader setup, and planar projection techniques.
 
-11. Time Spent
---------------
+AI tools were used for planning, debugging support, review checklists, README
+wording, refactoring suggestions, and small code-pattern suggestions. I
+reviewed and integrated the final code and personally tested the completed
+program.
 
-Time spent so far: approximately 47 hours.
-Expected additional time before final submission: approximately 6 hours.
+Time Spent
+----------
 
-12. Known Limitations
----------------------
+Approximately 53 hours total: about 47 hours through the review build and
+about 6 additional hours for final implementation, testing, and polish.
 
-- Wind ribbons are intentionally restrained at scene scale and are easiest to
-  review in turbine inspection mode.
-- Shader mode has a fixed-pipeline fallback if GLSL compilation or linking is
-  unsupported.
-- Transparent geometry is separated into later render passes but is not sorted
-  per polygon.
-- Projected shadows are simplified silhouettes on the flat y=0 terrain plane.
-  They do not follow raised geometry, use soft edges, or model self-shadowing.
-  Very low light heights are clamped for shadow stability.
-- First-person navigation has boundary limits but no object collision
-  detection.
-- Energy-display values are intentionally illustrative and are not calibrated
-  power, weather, or battery measurements.
+Known Limitations
+-----------------
+
+- Transparent surfaces are drawn in separate late passes, but individual
+  transparent polygons are not depth-sorted.
+- Planar shadows are simplified silhouettes projected onto the flat `y = 0`
+  terrain. They do not follow raised surfaces, self-shadow, or use soft edges.
+- First-person movement is bounded to the farm area but has no collision
+  detection against scene objects.
+- Wind ribbons appear only in the full-scene and turbine-inspection views.
+- Energy Status Display values are illustrative normalized values, not
+  calibrated power, weather, or battery measurements.
