@@ -96,7 +96,7 @@ const double windSpeedStep = 0.25;
 const double baseBladeDegreesPerSecond = 45.0;
 const double anemometerDegreesPerSecond = 120.0;
 const double terrainHalfSize = 45.0;
-const double defaultOrbitDistance = 42.0;
+const double defaultOrbitDistance = 63.0;
 const double minOrbitDistance = 3.0;
 const double maxOrbitDistance = 80.0;
 const double overheadExtent = 50.0;
@@ -151,24 +151,25 @@ struct InspectionPreset
 {
    const char* name;
    double targetY;
-   double distance;
+   double cameraDistance;
    int azimuth;
    int elevation;
 };
 
-// One table owns the professor-facing labels and startup framing for every
-// inspection entry. The distance is the existing orbit "dim" value.
+// One table owns the professor-facing labels and literal camera distance for
+// every inspection entry. Values are tuned to fill a 60-degree perspective
+// view without clipping when the user begins orbiting.
 const InspectionPreset inspectionPresets[INSPECTION_COUNT] =
 {
    {"Full scene",                 1.0, defaultOrbitDistance, 35, 30},
-   {"Wind turbine",               2.6, 5.2,                  30, 14},
-   {"Barn / farmhouse",           1.6, 4.8,                  30, 18},
-   {"Greenhouse",                 1.2, 4.2,                  30, 18},
-   {"Solar panel",                0.8, 3.0,                  30, 18},
-   {"Battery / inverter unit",    1.6, 5.2,                  30, 16},
-   {"Sheep",                      0.9, 3.0,                  25, 15},
-   {"Farmer / worker",            1.4, 3.0,                  20, 12},
-   {"Rocks / boulders",           0.6, 3.2,                  30, 18}
+   {"Wind turbine",               2.8,  8.0, 18, 10},
+   {"Control Center",             1.5,  6.8,  8, 14},
+   {"Greenhouse",                 1.2,  6.4, 25, 17},
+   {"Solar panel",                0.8,  4.5, 28, 18},
+   {"Battery / inverter",         1.5,  5.8, 25, 14},
+   {"Sheep",                      0.9,  4.0, 25, 12},
+   {"Maintenance worker",         1.2,  4.2, 20, 10},
+   {"Boulder cluster",            0.6,  4.6, 30, 16}
 };
 
 int axes = 0;
@@ -363,6 +364,38 @@ void DrawText(int x, int y, const char* text)
    glRasterPos2i(x, y);
    for (const char* ch = text; *ch; ++ch)
       glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *ch);
+}
+
+// Give isolated-object views a dedicated label that remains readable over
+// bright glass, metal, and ground surfaces.
+void DrawInspectionLabel()
+{
+   if (inspectionMode == INSPECT_FULL_SCENE)
+      return;
+
+   const char* name = InspectionName();
+   int textWidth = 0;
+   for (const char* ch = name; *ch; ++ch)
+      textWidth += glutBitmapWidth(GLUT_BITMAP_HELVETICA_18, *ch);
+
+   const int padding = 9;
+   const int right = windowWidth - 12;
+   const int left = right - textWidth - 2 * padding;
+   const int bottom = windowHeight - 39;
+   const int top = windowHeight - 12;
+
+   glColor3f(0.06f, 0.08f, 0.10f);
+   glBegin(GL_QUADS);
+   glVertex2i(left, bottom);
+   glVertex2i(right, bottom);
+   glVertex2i(right, top);
+   glVertex2i(left, top);
+   glEnd();
+
+   glColor3f(0.92f, 0.95f, 0.96f);
+   glRasterPos2i(left + padding, bottom + 7);
+   for (const char* ch = name; *ch; ++ch)
+      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *ch);
 }
 
 // Configure projection independently from camera position and orientation.
@@ -2834,15 +2867,11 @@ void display()
 
    if (mode == ORBIT_MODE)
    {
-      // Keep close inspection presets unchanged while framing the full farm
-      // more tightly on startup and after reset.
-      const double orbitScale =
-         inspectionMode == INSPECT_FULL_SCENE ? 1.50 : 2.0;
       const double ex =
-         viewTargetX - orbitScale * dim * Sin(th) * Cos(ph);
-      const double ey = viewTargetY + orbitScale * dim * Sin(ph);
+         viewTargetX - dim * Sin(th) * Cos(ph);
+      const double ey = viewTargetY + dim * Sin(ph);
       const double ez =
-         viewTargetZ + orbitScale * dim * Cos(th) * Cos(ph);
+         viewTargetZ + dim * Cos(th) * Cos(ph);
       gluLookAt(ex, ey, ez,
                 viewTargetX, viewTargetY, viewTargetZ,
                 0, Cos(ph), 0);
@@ -2935,6 +2964,7 @@ void display()
    DrawText(10, 21, "0: full scene  1-8: inspect object  m: camera");
    DrawText(10, 10,
             "p: shader  v: ribbons  q/ESC: quit");
+   DrawInspectionLabel();
 
    glPopMatrix();
    glMatrixMode(GL_PROJECTION);
@@ -2970,7 +3000,7 @@ void SetInspectionMode(int selectedMode)
    viewTargetZ = 0;
    th = preset.azimuth;
    ph = preset.elevation;
-   dim = preset.distance;
+   dim = preset.cameraDistance;
 }
 
 // Restore the original full-scene camera and moving-light position.
@@ -2986,12 +3016,41 @@ void ResetCamera()
    fpPitch = 0;
    th = 35;
    ph = 30;
-   dim = defaultOrbitDistance;
+   dim = inspectionPresets[INSPECT_FULL_SCENE].cameraDistance;
    viewTargetX = 0;
    viewTargetY = 1;
    viewTargetZ = 0;
    lightAngle = 90;
    lightHeight = 25;
+}
+
+// Start first-person mode at the currently displayed orbit eye and point it at
+// the same target. This avoids a jump back to a stale farm walking position.
+void EnterFirstPersonFromOrbit()
+{
+   if (inspectionMode == INSPECT_FULL_SCENE)
+   {
+      eyeX = 0.0;
+      eyeY = firstPersonHeight;
+      eyeZ = 42.0;
+      fpYaw = 0.0;
+      fpPitch = 0.0;
+      return;
+   }
+
+   eyeX = viewTargetX - dim * Sin(th) * Cos(ph);
+   eyeY = viewTargetY + dim * Sin(ph);
+   eyeZ = viewTargetZ + dim * Cos(th) * Cos(ph);
+
+   const double dx = viewTargetX - eyeX;
+   const double dy = viewTargetY - eyeY;
+   const double dz = viewTargetZ - eyeZ;
+   const double length = std::sqrt(dx * dx + dy * dy + dz * dz);
+   if (length > 0.0)
+   {
+      fpPitch = std::asin(dy / length) * 180.0 / 3.1415927;
+      fpYaw = std::atan2(dx, -dz) * 180.0 / 3.1415927;
+   }
 }
 
 // Zoom changes orbit distance only; walking always changes eye position.
@@ -3029,7 +3088,8 @@ void MoveFirstPerson(double forward, double strafe)
    eyeZ += firstPersonStep *
            (-forward * Cos(fpYaw) + strafe * Sin(fpYaw));
    eyeX = Clamp(eyeX, -firstPersonBoundary, firstPersonBoundary);
-   eyeY = firstPersonHeight;
+   if (inspectionMode == INSPECT_FULL_SCENE)
+      eyeY = firstPersonHeight;
    eyeZ = Clamp(eyeZ, -firstPersonBoundary, firstPersonBoundary);
 }
 
@@ -3042,7 +3102,15 @@ void key(unsigned char ch, int, int)
    }
    else if (ch == 'm' || ch == 'M')
    {
-      mode = static_cast<CameraMode>((mode + 1) % 3);
+      if (mode == ORBIT_MODE)
+      {
+         EnterFirstPersonFromOrbit();
+         mode = FIRST_PERSON_MODE;
+      }
+      else if (mode == FIRST_PERSON_MODE)
+         mode = OVERHEAD_MODE;
+      else
+         mode = ORBIT_MODE;
    }
    else if (mode == FIRST_PERSON_MODE && (ch == 'w' || ch == 'W'))
    {
