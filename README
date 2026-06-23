@@ -58,6 +58,8 @@ visualization, not a simulation-heavy game.
   fallback if the shader is disabled or unavailable.
 - Transparent greenhouse glass rendered in a separate blended pass with depth
   writes disabled.
+- Optional stencil-masked planar shadows for turbines, the Control Center,
+  greenhouse, solar panels, sheep, and the maintenance worker.
 - Optional linear distance fog, disabled at startup.
 - Texture, lighting, glass, ribbon, shader, fog, axes, and animation toggles.
 - On-screen HUD showing the selected object, camera mode, wind speed, shader
@@ -174,6 +176,7 @@ Lighting, rendering, and animation:
     < / >             Lower / raise the sun
     l or L            Toggle lighting
     f or F            Toggle distance fog
+    h or H            Toggle projected ground shadows
     t or T            Toggle textures
     g or G            Toggle greenhouse glass
     a or A            Toggle axes outside first-person mode
@@ -254,8 +257,9 @@ Expected additional time before final submission: approximately 6 hours.
   unsupported.
 - Transparent geometry is separated into later render passes but is not sorted
   per polygon.
-- Simple projected shadows are not currently implemented; they are optional
-  final polish only.
+- Projected shadows are simplified silhouettes on the flat y=0 terrain plane.
+  They do not follow raised geometry, use soft edges, or model self-shadowing.
+  Very low light heights are clamped for shadow stability.
 - First-person navigation has boundary limits but no object collision
   detection.
 - Energy-display values are intentionally illustrative and are not calibrated

@@ -192,6 +192,7 @@ int glassVisible = 1;
 int moveLight = 1;
 int showRibbons = 1;
 int useShader = 1;
+int shadowsEnabled = 1;
 // Fog remains available through the 'f' toggle but starts disabled so the
 // complete energy facility is clear and readable on first launch.
 int fogEnabled = 0;
@@ -2640,6 +2641,8 @@ void drawMaintenanceWorker()
    ResetMaterial();
 }
 
+void drawPlacedMaintenanceWorker();
+
 // Place the weather station and farm figures in their functional full-scene
 // locations. Inspection mode draws the same models directly at the origin.
 void drawFarmCharactersAndInstruments()
@@ -2657,8 +2660,15 @@ void drawFarmCharactersAndInstruments()
    drawWindsock();
    glPopMatrix();
 
-   glPushMatrix();
    // Stand just outside the battery shed's open front, facing the cabinets.
+   drawPlacedMaintenanceWorker();
+}
+
+// Draw only the worker at its full-scene location. This transform is shared by
+// the normal scene and the optional planar-shadow caster pass.
+void drawPlacedMaintenanceWorker()
+{
+   glPushMatrix();
    glTranslated(batteryZoneX, 0, batteryZoneZ);
    glRotated(-8, 0, 1, 0);
    glTranslated(-2.2, 0, 3.35);
@@ -3127,6 +3137,106 @@ void drawScene()
    drawPowerLines();
 }
 
+// Draw the selected major objects again as shadow casters. The caller disables
+// color writes, so their ordinary colors and materials never reach the frame.
+void drawShadowCasters()
+{
+   drawTurbineField();
+   drawBarnGroup();
+   drawGreenhouseOpaque();
+   drawSolarFarm();
+   drawPlacedMaintenanceWorker();
+
+   // Sheep are simple enough to include without projecting the paddock fence.
+   const SheepInstance herd[] =
+   {
+      {-3.8, -2.6, 0.82, -18, 0.2},
+      {-0.8,  2.4, 0.70,  24, 1.5},
+      { 3.0, -1.2, 0.88,  63, 2.8},
+      { 4.3,  3.7, 0.76, -42, 4.1}
+   };
+
+   glPushMatrix();
+   glTranslated(paddockZoneX, 0, paddockZoneZ);
+   for (int sheep = 0; sheep < 4; ++sheep)
+      drawSheepInstance(herd[sheep]);
+   glPopMatrix();
+}
+
+// Build a column-major matrix that projects geometry onto y=0 from a point
+// light. This is the standard course-style planar-shadow construction.
+void BuildGroundShadowMatrix(const float light[4], double matrix[16])
+{
+   const double lightY = std::fmax(4.0, static_cast<double>(light[1]));
+   const double lightX = light[0];
+   const double lightZ = light[2];
+   const double lightW = light[3];
+
+   matrix[0]  = lightY; matrix[4]  = -lightX;
+   matrix[8]  = 0;      matrix[12] = 0;
+   matrix[1]  = 0;      matrix[5]  = 0;
+   matrix[9]  = 0;      matrix[13] = 0;
+   matrix[2]  = 0;      matrix[6]  = -lightZ;
+   matrix[10] = lightY; matrix[14] = 0;
+   matrix[3]  = 0;      matrix[7]  = -lightW;
+   matrix[11] = 0;      matrix[15] = lightY;
+}
+
+// Project selected silhouettes onto the terrain and darken each covered ground
+// pixel once. The stencil mask avoids dark overlap artifacts from caster faces.
+void drawProjectedShadows(const float lightPosition[4])
+{
+   if (!shadowsEnabled || inspectionMode != INSPECT_FULL_SCENE)
+      return;
+
+   double shadowMatrix[16];
+   BuildGroundShadowMatrix(lightPosition, shadowMatrix);
+
+   glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT |
+                GL_LIGHTING_BIT | GL_POLYGON_BIT | GL_STENCIL_BUFFER_BIT |
+                GL_TEXTURE_BIT);
+   glDisable(GL_LIGHTING);
+   glDisable(GL_TEXTURE_2D);
+   glDisable(GL_FOG);
+   glDisable(GL_BLEND);
+   glEnable(GL_DEPTH_TEST);
+   glDepthFunc(GL_LEQUAL);
+   glDepthMask(GL_FALSE);
+
+   // First pass: flatten caster geometry slightly above y=0 and write only its
+   // visible ground silhouette into the stencil buffer.
+   glEnable(GL_STENCIL_TEST);
+   glStencilMask(0xFF);
+   glStencilFunc(GL_ALWAYS, 1, 0xFF);
+   glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+   glPushMatrix();
+   glTranslated(0, 0.025, 0);
+   glMultMatrixd(shadowMatrix);
+   drawShadowCasters();
+   glPopMatrix();
+
+   // Second pass: one subtle transparent ground polygon covers the stencil.
+   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+   glStencilMask(0x00);
+   glStencilFunc(GL_EQUAL, 1, 0xFF);
+   glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glEnable(GL_POLYGON_OFFSET_FILL);
+   glPolygonOffset(-1.0f, -1.0f);
+   glColor4f(0.015f, 0.020f, 0.025f, 0.22f);
+   glBegin(GL_QUADS);
+   glNormal3f(0, 1, 0);
+   glVertex3d(-terrainHalfSize, 0.028, -terrainHalfSize);
+   glVertex3d(-terrainHalfSize, 0.028,  terrainHalfSize);
+   glVertex3d( terrainHalfSize, 0.028,  terrainHalfSize);
+   glVertex3d( terrainHalfSize, 0.028, -terrainHalfSize);
+   glEnd();
+
+   glPopAttrib();
+}
+
 // Draw a neutral inspection floor and one-unit grid at y=0. It is intentionally
 // untextured so object textures, materials, silhouette, and scale stay clear.
 void drawInspectionGround()
@@ -3309,7 +3419,7 @@ void ConfigureFog()
 // Render the selected object group, scene overlays, and status HUD.
 void display()
 {
-   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
    glEnable(GL_DEPTH_TEST);
 
    Project();
@@ -3369,6 +3479,11 @@ void display()
       drawScene();
    else
       drawInspectionObject();
+
+   // Shadows are an opaque-scene overlay. Draw them before greenhouse glass
+   // and wind ribbons, with all modified fixed-pipeline state restored locally.
+   drawProjectedShadows(lightPosition);
+
    glDisable(GL_LIGHTING);
    if (axes)
       DrawAxes();
@@ -3400,11 +3515,12 @@ void display()
                  "View %d/8: %s   Camera: %s",
                  inspectionMode, InspectionName(), ModeName());
 
-   char windText[160];
+   char windText[180];
    std::snprintf(windText, sizeof(windText),
-                 "Wind: %.2f   Shader: %s   Ribbons: %s",
+                 "Wind: %.2f   Shader: %s   Ribbons: %s   Shadows: %s",
                  windSpeed, useShader && windProgram ? "On" : "Off / fallback",
-                 showRibbons ? "On" : "Off");
+                 showRibbons ? "On" : "Off",
+                 shadowsEnabled ? "On" : "Off");
 
    DrawText(10, 54,
             "Shader-Based Renewable Energy Farm - Gunabhiram Aruru");
@@ -3412,7 +3528,7 @@ void display()
    DrawText(10, 32, windText);
    DrawText(10, 21, "0: full scene  1-8: inspect object  m: camera");
    DrawText(10, 10,
-            "p: shader  v: ribbons  q/ESC: quit");
+            "p: shader  v: ribbons  h: shadows  q/ESC: quit");
    DrawInspectionLabel();
 
    glPopMatrix();
@@ -3615,6 +3731,10 @@ void key(unsigned char ch, int, int)
    {
       fogEnabled = 1 - fogEnabled;
    }
+   else if (ch == 'h' || ch == 'H')
+   {
+      shadowsEnabled = 1 - shadowsEnabled;
+   }
    else if (ch == ' ')
    {
       moveLight = 1 - moveLight;
@@ -3809,7 +3929,7 @@ int main(int argc, char* argv[])
 {
    glutInit(&argc, argv);
    // GLUT_DEPTH allocates the depth buffer used for hidden-surface removal.
-   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH | GLUT_STENCIL);
    glutInitWindowSize(windowWidth, windowHeight);
    glutCreateWindow("Gunabhiram Aruru - Shader-Based Renewable Energy Farm Visualization");
 
