@@ -1205,6 +1205,35 @@ void drawFarmSign()
       glEnable(GL_LIGHTING);
 }
 
+// Draw a handmade rectangle on the building's front wall. Coordinates are
+// specified explicitly so facade details remain polygon-based rather than
+// relying on library solids.
+void drawFrontFacadeQuad(double left, double bottom, double right, double top,
+                         double z)
+{
+   glBegin(GL_QUADS);
+   glNormal3f(0, 0, -1);
+   glTexCoord2f(0, 0); glVertex3d(left,  bottom, z);
+   glTexCoord2f(0, 1); glVertex3d(left,  top,    z);
+   glTexCoord2f(1, 1); glVertex3d(right, top,    z);
+   glTexCoord2f(1, 0); glVertex3d(right, bottom, z);
+   glEnd();
+}
+
+// Draw a handmade rectangle on either side wall. outwardSign is -1 for the
+// left wall and +1 for the right wall.
+void drawSideFacadeQuad(double x, double bottom, double nearZ, double top,
+                        double farZ, double outwardSign)
+{
+   glBegin(GL_QUADS);
+   glNormal3d(outwardSign, 0, 0);
+   glTexCoord2f(0, 0); glVertex3d(x, bottom, nearZ);
+   glTexCoord2f(0, 1); glVertex3d(x, top,    nearZ);
+   glTexCoord2f(1, 1); glVertex3d(x, top,    farZ);
+   glTexCoord2f(1, 0); glVertex3d(x, bottom, farZ);
+   glEnd();
+}
+
 // Draw an origin-centered renewable-energy control building with textured
 // walls and roof, metal details, windows, entrance, sign, and roof antenna.
 void drawControlBuilding()
@@ -1246,33 +1275,112 @@ void drawControlBuilding()
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
 
-   // Front entrance uses a wood texture and metal frame/handle.
+   // Door and window layers lie very close to the wall. Pull their filled
+   // polygons slightly toward the camera in depth-buffer space so coplanar
+   // wall fragments cannot flicker through them. Limit polygon offset to this
+   // overlay block so it cannot alter the roof or other scene geometry.
+   glEnable(GL_POLYGON_OFFSET_FILL);
+   glPolygonOffset(-1.0f, -1.0f);
+
+   // A dark reveal around the door gives the entrance an inset construction.
+   glColor3f(0.12f, 0.14f, 0.13f);
+   drawFrontFacadeQuad(-0.62, 0.04, 0.62, 1.69, -1.701);
+
+   // The inset door leaf retains the existing wood texture and material.
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, textureAssets.wood);
-      glColor3f(0.70f, 0.46f, 0.24f);
+      glColor3f(0.64f, 0.43f, 0.25f);
    }
    else
       glColor3f(0.38f, 0.20f, 0.08f);
-   drawBox(0, 0.82, -1.725, 1.05, 1.55, 0.10);
+   drawFrontFacadeQuad(-0.52, 0.10, 0.52, 1.60, -1.704);
    glDisable(GL_TEXTURE_2D);
 
+   // Two restrained inset panels add depth without making the door ornate.
+   glColor3f(0.29f, 0.17f, 0.09f);
+   drawFrontFacadeQuad(-0.40, 0.22, 0.40, 0.72, -1.707);
+   drawFrontFacadeQuad(-0.40, 0.86, 0.40, 1.46, -1.707);
+
+   // Narrow metal polygons form a clean frame around the door leaf.
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0f);
-   glColor3f(0.68f, 0.72f, 0.72f);
-   drawBox(-0.56, 0.82, -1.79, 0.07, 1.65, 0.07);
-   drawBox( 0.56, 0.82, -1.79, 0.07, 1.65, 0.07);
-   drawBox(0, 1.62, -1.79, 1.18, 0.07, 0.07);
-   glColor3f(0.88f, 0.70f, 0.18f);
-   drawBox(0.37, 0.80, -1.81, 0.08, 0.08, 0.06);
+   glColor3f(0.48f, 0.53f, 0.53f);
+   drawFrontFacadeQuad(-0.62, 0.04, -0.54, 1.69, -1.710);
+   drawFrontFacadeQuad( 0.54, 0.04,  0.62, 1.69, -1.710);
+   drawFrontFacadeQuad(-0.62, 1.61,  0.62, 1.69, -1.710);
 
-   // Slightly raised blue-gray panes avoid z-fighting with the wall.
-   glColor3f(0.28f, 0.58f, 0.70f);
-   drawBox(-1.42, 1.12, -1.725, 0.85, 0.72, 0.08);
-   drawBox( 1.42, 1.12, -1.725, 0.85, 0.72, 0.08);
-   drawBox(-2.325, 1.12, 0.78, 0.08, 0.72, 1.05);
-   drawBox( 2.325, 1.12, 0.78, 0.08, 0.72, 1.05);
+   // Small handmade handle: a mounting plate and a short projecting grip.
+   glColor3f(0.72f, 0.62f, 0.30f);
+   drawFrontFacadeQuad(0.33, 0.76, 0.43, 0.88, -1.713);
+   drawBox(0.38, 0.82, -1.755, 0.055, 0.055, 0.085);
+
+   // Front windows use a dark interior backing, cool glass, perimeter frames,
+   // and cross mullions. The muted palette matches the industrial materials.
+   const double frontWindowCenter[] = {-1.42, 1.42};
+   for (int window = 0; window < 2; ++window)
+   {
+      const double center = frontWindowCenter[window];
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, wallSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+      glColor3f(0.075f, 0.105f, 0.105f);
+      drawFrontFacadeQuad(center - 0.50, 0.68,
+                          center + 0.50, 1.56, -1.701);
+
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+      glColor3f(0.24f, 0.42f, 0.48f);
+      drawFrontFacadeQuad(center - 0.43, 0.75,
+                          center + 0.43, 1.49, -1.704);
+
+      glColor3f(0.43f, 0.48f, 0.47f);
+      drawFrontFacadeQuad(center - 0.50, 0.68,
+                          center - 0.43, 1.56, -1.708);
+      drawFrontFacadeQuad(center + 0.43, 0.68,
+                          center + 0.50, 1.56, -1.708);
+      drawFrontFacadeQuad(center - 0.50, 0.68,
+                          center + 0.50, 0.75, -1.708);
+      drawFrontFacadeQuad(center - 0.50, 1.49,
+                          center + 0.50, 1.56, -1.708);
+      drawFrontFacadeQuad(center - 0.035, 0.75,
+                          center + 0.035, 1.49, -1.710);
+      drawFrontFacadeQuad(center - 0.43, 1.085,
+                          center + 0.43, 1.155, -1.710);
+   }
+
+   // Repeat the same layered construction on both side elevations.
+   for (int side = -1; side <= 1; side += 2)
+   {
+      const double wallX = 2.3 * side;
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, wallSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+      glColor3f(0.075f, 0.105f, 0.105f);
+      drawSideFacadeQuad(wallX + 0.001 * side, 0.68, 0.18, 1.56,
+                         1.38, side);
+
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+      glColor3f(0.24f, 0.42f, 0.48f);
+      drawSideFacadeQuad(wallX + 0.004 * side, 0.75, 0.25, 1.49,
+                         1.31, side);
+
+      glColor3f(0.43f, 0.48f, 0.47f);
+      drawSideFacadeQuad(wallX + 0.008 * side, 0.68, 0.18, 0.75,
+                         1.38, side);
+      drawSideFacadeQuad(wallX + 0.008 * side, 1.49, 0.18, 1.56,
+                         1.38, side);
+      drawSideFacadeQuad(wallX + 0.008 * side, 0.68, 0.18, 1.56,
+                         0.25, side);
+      drawSideFacadeQuad(wallX + 0.008 * side, 0.68, 1.31, 1.56,
+                         1.38, side);
+      drawSideFacadeQuad(wallX + 0.010 * side, 0.75, 0.745, 1.49,
+                         0.815, side);
+      drawSideFacadeQuad(wallX + 0.010 * side, 1.085, 0.25, 1.155,
+                         1.31, side);
+   }
+
+   glDisable(GL_POLYGON_OFFSET_FILL);
 
    drawFarmSign();
 
