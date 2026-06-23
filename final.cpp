@@ -496,7 +496,11 @@ void drawBox(double x, double y, double z,
    glPushMatrix();
    glTranslated(x, y, z);
    glScaled(sx, sy, sz);
-   drawBoxUnit();
+   // Preserve roughly uniform texture density on long rails, posts, cabinets,
+   // and signs instead of stretching one texture copy over the entire box.
+   drawBoxUnit(std::fmax(1.0, std::fabs(sx)),
+               std::fmax(1.0, std::fabs(sy)),
+               std::fmax(1.0, std::fabs(sz)));
    glPopMatrix();
 }
 
@@ -515,7 +519,9 @@ void SetMaterial(float red, float green, float blue, float shininess)
 // Restore the neutral scene material after an object-specific material.
 void ResetMaterial()
 {
-   SetMaterial(0.22f, 0.22f, 0.22f, 24.0f);
+   // Most farm surfaces are painted, wooden, earthen, or organic. Start matte
+   // and opt individual metal/glass/photovoltaic surfaces into highlights.
+   SetMaterial(0.06f, 0.06f, 0.06f, 8.0f);
 }
 
 // Draw one handmade turbine blade with front, back, and edge normals.
@@ -523,6 +529,8 @@ void drawBladeUnit()
 {
    const double x[5] = {-0.08, 0.17, 0.30, 0.09, -0.16};
    const double y[5] = { 0.20, 0.43, 1.55, 1.78,  0.62};
+   const double minX = -0.16;
+   const double width = 0.46;
    const double front = 0.07;
    const double back = -0.07;
 
@@ -530,7 +538,7 @@ void drawBladeUnit()
    glNormal3f(0, 0, 1);
    for (int i = 0; i < 5; ++i)
    {
-      glTexCoord2d(x[i] + 0.16, y[i] / 1.78);
+      glTexCoord2d((x[i] - minX) / width, y[i] / 1.78);
       glVertex3d(x[i], y[i], front);
    }
    glEnd();
@@ -539,7 +547,7 @@ void drawBladeUnit()
    glNormal3f(0, 0, -1);
    for (int i = 4; i >= 0; --i)
    {
-      glTexCoord2d(x[i] + 0.16, y[i] / 1.78);
+      glTexCoord2d((x[i] - minX) / width, y[i] / 1.78);
       glVertex3d(x[i], y[i], back);
    }
    glEnd();
@@ -661,7 +669,7 @@ void drawWindmillBaseUnit()
 void drawTurbine(double bladeOffset = 0.0)
 {
    const float turbineSpecular[] = {0.55f, 0.58f, 0.62f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+   const float woodSpecular[] = {0.08f, 0.07f, 0.05f, 1.0f};
 
    // Turbine metal receives a restrained highlight without looking chrome-like.
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, turbineSpecular);
@@ -680,6 +688,8 @@ void drawTurbine(double bladeOffset = 0.0)
    glPushMatrix();
    glTranslated(0, 3.0, 0.58);
    glRotated(bladeAngle + bladeOffset, 0, 0, 1);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, woodSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 7.0f);
    if (textures)
       glColor3f(0.95f, 0.90f, 0.78f);
    else
@@ -697,14 +707,15 @@ void drawTurbine(double bladeOffset = 0.0)
       glColor3f(0.85f, 0.85f, 0.82f);
    else
       glColor3f(0.32f, 0.25f, 0.18f);
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, turbineSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 42.0f);
    if (textures)
       glBindTexture(GL_TEXTURE_2D, textureAssets.metal);
    drawHubUnit();
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Transform and draw one turbine instance in the farm.
@@ -724,6 +735,8 @@ void drawWindmillInstance(const Instance& instance)
 // surface, a low soil foundation, and handmade crop rows at the outer edges.
 void drawExpandedTerrain()
 {
+   SetMaterial(0.025f, 0.025f, 0.025f, 3.0f);
+
    glPushMatrix();
    glTranslated(0, -0.12, 0);
    glScaled(2 * terrainHalfSize, 0.2, 2 * terrainHalfSize);
@@ -762,6 +775,7 @@ void drawExpandedTerrain()
    drawBox(0, 0.015,  44.0, 88.0, 0.03, 0.32);
    drawBox(-44.0, 0.015, 0, 0.32, 0.03, 88.0);
    drawBox( 44.0, 0.015, 0, 0.32, 0.03, 88.0);
+   ResetMaterial();
 }
 
 // Draw one textured road strip above the grass surface.
@@ -811,6 +825,7 @@ void drawPathNetwork()
 // Draw one reusable fence section from handmade box geometry.
 void drawFenceSection(double x, double z, double length, double rotation)
 {
+   SetMaterial(0.07f, 0.055f, 0.035f, 6.0f);
    glPushMatrix();
    glTranslated(x, 0, z);
    glRotated(rotation, 0, 1, 0);
@@ -843,6 +858,7 @@ void drawFenceSection(double x, double z, double length, double rotation)
    }
    glDisable(GL_TEXTURE_2D);
    glPopMatrix();
+   ResetMaterial();
 }
 
 // Place functional fencing around the battery yard, substation, and greenhouse.
@@ -865,8 +881,9 @@ void drawFence()
    }
 }
 
-// Draw one triangle with a calculated flat normal and simple local planar
-// texture coordinates. Flat shading keeps the handmade boulder facets visible.
+// Draw one triangle with a calculated flat normal. Texture projection follows
+// the dominant face axis so steep boulder sides do not collapse into a thin
+// strip of the top-down rock texture.
 void drawRockTriangle(const double a[3], const double b[3], const double c[3])
 {
    const double ux = b[0] - a[0];
@@ -883,14 +900,37 @@ void drawRockTriangle(const double a[3], const double b[3], const double c[3])
    ny /= length;
    nz /= length;
 
+   int projectionAxis = 1;
+   if (std::fabs(nx) > std::fabs(ny) && std::fabs(nx) > std::fabs(nz))
+      projectionAxis = 0;
+   else if (std::fabs(nz) > std::fabs(ny))
+      projectionAxis = 2;
+
+   const double* vertices[] = {a, b, c};
    glBegin(GL_TRIANGLES);
    glNormal3d(nx, ny, nz);
-   glTexCoord2d(0.5 + 0.45 * a[0], 0.5 + 0.45 * a[2]);
-   glVertex3dv(a);
-   glTexCoord2d(0.5 + 0.45 * b[0], 0.5 + 0.45 * b[2]);
-   glVertex3dv(b);
-   glTexCoord2d(0.5 + 0.45 * c[0], 0.5 + 0.45 * c[2]);
-   glVertex3dv(c);
+   for (int vertex = 0; vertex < 3; ++vertex)
+   {
+      double textureS;
+      double textureT;
+      if (projectionAxis == 0)
+      {
+         textureS = vertices[vertex][2];
+         textureT = vertices[vertex][1];
+      }
+      else if (projectionAxis == 2)
+      {
+         textureS = vertices[vertex][0];
+         textureT = vertices[vertex][1];
+      }
+      else
+      {
+         textureS = vertices[vertex][0];
+         textureT = vertices[vertex][2];
+      }
+      glTexCoord2d(0.5 + 0.45 * textureS, 0.5 + 0.45 * textureT);
+      glVertex3dv(vertices[vertex]);
+   }
    glEnd();
 }
 
@@ -977,7 +1017,6 @@ void drawPowerPole()
 {
    const float poleSpecular[] = {0.18f, 0.16f, 0.12f, 1.0f};
    const float metalSpecular[] = {0.42f, 0.44f, 0.46f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, poleSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 12.0f);
@@ -997,8 +1036,7 @@ void drawPowerPole()
       drawBox(0.72 * insulator, 4.65, 0, 0.24, 0.07, 0.24);
    }
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Draw one complete origin-centered electrical substation. The model contains
@@ -1007,8 +1045,8 @@ void drawPowerPole()
 void drawSubstation()
 {
    const float metalSpecular[] = {0.38f, 0.42f, 0.44f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
+   SetMaterial(0.045f, 0.045f, 0.045f, 5.0f);
    glColor3f(0.38f, 0.39f, 0.40f);
    drawBox(0, 0.08, 0, 9.0, 0.16, 6.0);
 
@@ -1044,8 +1082,7 @@ void drawSubstation()
       glColor3f(0.56f, 0.58f, 0.60f);
    }
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 
    // The boundary belongs to the reusable substation rather than global fence
    // code, so inspection mode shows the same complete object as the farm.
@@ -1273,7 +1310,7 @@ void drawControlBuilding()
 {
    const float wallSpecular[] = {0.08f, 0.07f, 0.06f, 1.0f};
    const float metalSpecular[] = {0.55f, 0.58f, 0.60f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+   const float windowSpecular[] = {0.32f, 0.40f, 0.44f, 1.0f};
 
    // Painted wall surfaces remain mostly diffuse.
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, wallSpecular);
@@ -1361,8 +1398,8 @@ void drawControlBuilding()
       drawFrontFacadeQuad(center - 0.50, 0.68,
                           center + 0.50, 1.56, -1.701);
 
-      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, windowSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 46.0f);
       glColor3f(0.24f, 0.42f, 0.48f);
       drawFrontFacadeQuad(center - 0.43, 0.75,
                           center + 0.43, 1.49, -1.704);
@@ -1392,8 +1429,8 @@ void drawControlBuilding()
       drawSideFacadeQuad(wallX + 0.001 * side, 0.68, 0.18, 1.56,
                          1.38, side);
 
-      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, windowSpecular);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 46.0f);
       glColor3f(0.24f, 0.42f, 0.48f);
       drawSideFacadeQuad(wallX + 0.004 * side, 0.75, 0.25, 1.49,
                          1.31, side);
@@ -1442,8 +1479,7 @@ void drawControlBuilding()
    if (lighting)
       glEnable(GL_LIGHTING);
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Draw one raised soil bed with a repeated row of simple leafy plants.
@@ -1451,6 +1487,7 @@ void drawControlBuilding()
 void drawPlantRow()
 {
    glDisable(GL_TEXTURE_2D);
+   SetMaterial(0.025f, 0.025f, 0.025f, 3.0f);
 
    glColor3f(0.30f, 0.16f, 0.07f);
    drawBox(0, 0.13, 0, 3.25, 0.24, 0.42);
@@ -1475,6 +1512,7 @@ void drawPlantRow()
       drawLowPolyEllipsoid(1.0, 1.0, 1.0);
       glPopMatrix();
    }
+   ResetMaterial();
 }
 
 // Draw the greenhouse base, door, vertical posts, rails, ridge, and rafters.
@@ -1486,6 +1524,7 @@ void drawGreenhouseFrame()
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
    const double frameX[] = {-2.0, 0.0, 2.0};
 
+   SetMaterial(0.34f, 0.36f, 0.36f, 30.0f);
    glColor3f(0.62f, 0.68f, 0.64f);
 
    if (textures)
@@ -1536,6 +1575,7 @@ void drawGreenhouseFrame()
    }
 
    glDisable(GL_TEXTURE_2D);
+   ResetMaterial();
 }
 
 // Draw the greenhouse wall and roof glass geometry.
@@ -1546,8 +1586,8 @@ void drawGreenhouseGlassPanels()
    const double roofLength = std::sqrt(1.4 * 1.4 + 0.9 * 0.9);
 
    glDisable(GL_TEXTURE_2D);
-   SetMaterial(0.38f, 0.50f, 0.54f, 52.0f);
-   glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
+   SetMaterial(0.30f, 0.40f, 0.44f, 48.0f);
+   glColor4f(0.48f, 0.76f, 0.78f, 0.32f);
 
    // Back wall uses two broad panes.
    drawBox(-1.0, 0.82, 1.405, 1.82, 1.32, 0.035);
@@ -1556,9 +1596,9 @@ void drawGreenhouseGlassPanels()
    // The front wall leaves a centered opening occupied by a glass door.
    drawBox(-1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
    drawBox( 1.35, 0.82, -1.405, 1.12, 1.32, 0.035);
-   glColor4f(0.40f, 0.70f, 0.74f, 0.46f);
+   glColor4f(0.40f, 0.70f, 0.74f, 0.40f);
    drawBox(0, 0.77, -1.445, 0.96, 1.34, 0.035);
-   glColor4f(0.48f, 0.76f, 0.78f, 0.38f);
+   glColor4f(0.48f, 0.76f, 0.78f, 0.32f);
 
    for (int side = -1; side <= 1; side += 2)
    {
@@ -1625,13 +1665,13 @@ void drawGreenhouse(bool glassPass = false)
 // tilted photovoltaic face, raised frame, and raised cell-divider strips.
 void drawSolarPanel()
 {
-   const float panelSpecular[] = {0.58f, 0.68f, 0.82f, 1.0f};
+   const float panelSpecular[] = {0.50f, 0.60f, 0.74f, 1.0f};
    const float frameSpecular[] = {0.40f, 0.42f, 0.46f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glDisable(GL_TEXTURE_2D);
 
    // A broad concrete foot keeps the stand visibly anchored to the terrain.
+   SetMaterial(0.04f, 0.04f, 0.04f, 5.0f);
    glColor3f(0.32f, 0.34f, 0.35f);
    drawBox(0, 0.07, 0, 1.35, 0.14, 0.72);
 
@@ -1661,7 +1701,7 @@ void drawSolarPanel()
    // The dark blue face has high shininess so the moving positional light
    // creates a readable reflective highlight across the solar field.
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, panelSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 72.0f);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0f);
    glColor3f(0.04f, 0.12f, 0.24f);
    drawBox(0, 0, 0, 2.18, 0.055, 1.18);
 
@@ -1682,8 +1722,7 @@ void drawSolarPanel()
 
    glPopMatrix();
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Draw rows of repeated solar panels using transforms around one shared model.
@@ -1725,7 +1764,6 @@ void drawIndicatorLight(double x, double y, double z,
 void drawBatteryUnit()
 {
    const float cabinetSpecular[] = {0.32f, 0.34f, 0.36f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, cabinetSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 36.0f);
@@ -1792,8 +1830,7 @@ void drawBatteryUnit()
    glColor3f(0.06f, 0.07f, 0.08f);
    drawBox(0.78, 0.42, 0.05, 0.08, 0.38, 0.12);
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Draw an open-front storage shed containing battery cabinets and a separate
@@ -1864,6 +1901,8 @@ void drawEnergyStorageUnit()
    }
 
    // The side inverter and its status lights identify the AC conversion stage.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 38.0f);
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
@@ -1922,7 +1961,7 @@ void drawBatteryYard()
 void drawWeatherStation()
 {
    const float metalSpecular[] = {0.42f, 0.45f, 0.48f, 1.0f};
-   const float defaultSpecular[] = {0.22f, 0.22f, 0.22f, 1.0f};
+   const float panelSpecular[] = {0.42f, 0.52f, 0.66f, 1.0f};
 
    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0f);
@@ -1939,6 +1978,7 @@ void drawWeatherStation()
    glDisable(GL_TEXTURE_2D);
 
    // Weatherproof sensor enclosure and small status lamp.
+   SetMaterial(0.09f, 0.09f, 0.08f, 10.0f);
    glColor3f(0.78f, 0.80f, 0.76f);
    drawBox(0, 1.05, 0, 0.86, 0.62, 0.56);
    glColor3f(0.10f, 0.16f, 0.18f);
@@ -1947,6 +1987,8 @@ void drawWeatherStation()
    drawBox(0.27, 1.22, -0.31, 0.07, 0.07, 0.04);
 
    // Tiny solar panel powers the remote instrument box.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, panelSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 56.0f);
    glPushMatrix();
    glTranslated(-0.62, 2.15, 0);
    glRotated(-28, 0, 0, 1);
@@ -1957,6 +1999,8 @@ void drawWeatherStation()
    glPopMatrix();
 
    // Wind vane rotates as a single horizontal assembly around the mast.
+   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, metalSpecular);
+   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 40.0f);
    glPushMatrix();
    glTranslated(0, 3.08, 0);
    glRotated(-32, 0, 1, 0);
@@ -1973,6 +2017,25 @@ void drawWeatherStation()
    glVertex3d(-1.22, 0, 0.05);
    glVertex3d(-0.88, -0.20, 0.05);
    glVertex3d(-0.88, 0.20, 0.05);
+   glEnd();
+
+   // Close the vane prism so its three edge faces respond correctly when the
+   // assembly rotates broadside to the light.
+   const double vaneX[3] = {-1.22, -0.88, -0.88};
+   const double vaneY[3] = { 0.00,  0.20, -0.20};
+   glBegin(GL_QUADS);
+   for (int edge = 0; edge < 3; ++edge)
+   {
+      const int next = (edge + 1) % 3;
+      const double dx = vaneX[next] - vaneX[edge];
+      const double dy = vaneY[next] - vaneY[edge];
+      const double length = std::sqrt(dx * dx + dy * dy);
+      glNormal3d(-dy / length, dx / length, 0);
+      glVertex3d(vaneX[edge], vaneY[edge], -0.05);
+      glVertex3d(vaneX[next], vaneY[next], -0.05);
+      glVertex3d(vaneX[next], vaneY[next],  0.05);
+      glVertex3d(vaneX[edge], vaneY[edge],  0.05);
+   }
    glEnd();
    glPopMatrix();
 
@@ -1997,8 +2060,7 @@ void drawWeatherStation()
 
    drawBox(0, 3.38, 0, 0.10, 0.48, 0.10);
 
-   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, defaultSpecular);
-   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
+   ResetMaterial();
 }
 
 // Emit one vertex and its ellipsoid normal for the handmade low-poly body.
@@ -2252,6 +2314,7 @@ void drawTree(double x, double z, double scale)
    glTranslated(x, 0, z);
    glScaled(scale, scale, scale);
 
+   SetMaterial(0.055f, 0.045f, 0.03f, 5.0f);
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
@@ -2266,6 +2329,7 @@ void drawTree(double x, double z, double scale)
    glPopMatrix();
    glDisable(GL_TEXTURE_2D);
 
+   SetMaterial(0.025f, 0.035f, 0.02f, 4.0f);
    if (textures)
    {
       glEnable(GL_TEXTURE_2D);
@@ -2297,8 +2361,20 @@ void drawTree(double x, double z, double scale)
          glVertex3d(radius * Cos(angle), baseY, radius * Sin(angle));
       }
       glEnd();
+
+      glBegin(GL_POLYGON);
+      glNormal3f(0, -1, 0);
+      for (int i = sides - 1; i >= 0; --i)
+      {
+         const double angle = 360.0 * i / sides;
+         glTexCoord2d(0.5 + 0.5 * Cos(angle),
+                      0.5 + 0.5 * Sin(angle));
+         glVertex3d(radius * Cos(angle), baseY, radius * Sin(angle));
+      }
+      glEnd();
    }
    glDisable(GL_TEXTURE_2D);
+   ResetMaterial();
 
    glPopMatrix();
 }
