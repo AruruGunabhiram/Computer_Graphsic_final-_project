@@ -86,6 +86,14 @@ struct TextureAssets
    unsigned int wall;
 };
 
+struct EnergyDisplayValues
+{
+   double wind;
+   double turbine;
+   double solar;
+   double battery;
+};
+
 // -----------------------------------------------------------------------------
 // Constants and global application state
 // -----------------------------------------------------------------------------
@@ -165,7 +173,7 @@ const InspectionPreset inspectionPresets[INSPECTION_COUNT] =
 {
    {"Full scene",                 1.0, defaultOrbitDistance, 35, 30},
    {"Wind turbine",               2.8,  8.0, 18, 10},
-   {"Control Center",             1.5,  6.8,  8, 14},
+   {"Control Center",             1.5,  8.0,  8, 14},
    {"Greenhouse",                 1.2,  6.4, 25, 17},
    {"Solar panel",                0.8,  4.5, 28, 18},
    {"Battery / inverter",         1.5,  5.8, 25, 14},
@@ -1277,6 +1285,160 @@ void drawFarmSign()
       glEnable(GL_LIGHTING);
 }
 
+// Convert the scene controls into normalized display values. These deliberately
+// simple formulas drive a visualization prop, not a real energy simulation.
+EnergyDisplayValues CalculateEnergyDisplayValues()
+{
+   EnergyDisplayValues values;
+   values.wind =
+      std::fmax(0.0, std::fmin(1.0, windSpeed / maxWindSpeed));
+   values.turbine = std::pow(values.wind, 1.5);
+   values.solar =
+      std::fmax(0.0, std::fmin(1.0, Sin(lightAngle)));
+   values.battery =
+      std::fmax(0.0, std::fmin(1.0,
+                 0.15 + 0.45 * values.turbine + 0.40 * values.solar));
+   return values;
+}
+
+// Draw one bright horizontal meter over a recessed dark track.
+void drawEnergyStatusBar(double y, double value,
+                         float red, float green, float blue)
+{
+   const double trackLeft = -0.28;
+   const double trackWidth = 1.28;
+   const double fillWidth = trackWidth * value;
+
+   SetMaterial(0.02f, 0.02f, 0.02f, 4.0f);
+   glColor3f(0.10f, 0.13f, 0.14f);
+   drawBox(trackLeft + 0.5 * trackWidth, y, -0.091,
+           trackWidth + 0.08, 0.22, 0.035);
+
+   if (fillWidth > 0.001)
+   {
+      const float emission[] =
+      {
+         0.42f * red, 0.42f * green, 0.42f * blue, 1.0f
+      };
+      glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+      glColor3f(red, green, blue);
+      drawBox(trackLeft + 0.5 * fillWidth, y, -0.116,
+              fillWidth, 0.14, 0.025);
+      const float noEmission[] = {0, 0, 0, 1};
+      glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+   }
+
+   // Four small polygon ticks make the meter readable at a glance.
+   glColor3f(0.30f, 0.34f, 0.35f);
+   for (int tick = 1; tick < 4; ++tick)
+      drawBox(trackLeft + trackWidth * tick / 4.0, y, -0.135,
+              0.018, 0.18, 0.012);
+}
+
+// Draw compact polygon icons for wind, turbine, solar, and battery rows.
+void drawEnergyStatusIcon(int row, double y,
+                          float red, float green, float blue)
+{
+   const float emission[] =
+   {
+      0.28f * red, 0.28f * green, 0.28f * blue, 1.0f
+   };
+   const float noEmission[] = {0, 0, 0, 1};
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+   glColor3f(red, green, blue);
+
+   if (row == 0)
+   {
+      // Three offset stream strips represent wind speed.
+      drawBox(-0.78, y + 0.09, -0.116, 0.43, 0.055, 0.025);
+      drawBox(-0.72, y,        -0.116, 0.55, 0.055, 0.025);
+      drawBox(-0.81, y - 0.09, -0.116, 0.37, 0.055, 0.025);
+   }
+   else if (row == 1)
+   {
+      // A mast and three rectangular blades identify turbine output.
+      drawBox(-0.76, y - 0.07, -0.116, 0.055, 0.28, 0.025);
+      for (int blade = 0; blade < 3; ++blade)
+      {
+         glPushMatrix();
+         glTranslated(-0.76, y + 0.08, -0.116);
+         glRotated(120 * blade, 0, 0, 1);
+         drawBox(0, 0.13, 0, 0.055, 0.26, 0.025);
+         glPopMatrix();
+      }
+      drawBox(-0.76, y + 0.08, -0.135, 0.09, 0.09, 0.018);
+   }
+   else if (row == 2)
+   {
+      // A framed photovoltaic tile with raised cell dividers.
+      drawBox(-0.76, y, -0.116, 0.48, 0.30, 0.025);
+      glColor3f(0.08f, 0.20f, 0.28f);
+      drawBox(-0.76, y, -0.137, 0.34, 0.19, 0.012);
+      glColor3f(red, green, blue);
+      drawBox(-0.76, y, -0.146, 0.018, 0.19, 0.008);
+      drawBox(-0.76, y, -0.146, 0.34, 0.018, 0.008);
+   }
+   else
+   {
+      // A cabinet silhouette and terminal identify stored battery charge.
+      drawBox(-0.78, y, -0.116, 0.42, 0.29, 0.025);
+      drawBox(-0.78, y + 0.18, -0.116, 0.16, 0.07, 0.025);
+      glColor3f(0.08f, 0.12f, 0.12f);
+      drawBox(-0.78, y, -0.137, 0.25, 0.13, 0.012);
+   }
+
+   glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEmission);
+}
+
+// Draw the handmade Energy Status Display beside the Control Center. The
+// top-to-bottom rows are wind speed, turbine output, solar output, and battery
+// charge. It is a compact visualization prop rather than an engineering model.
+void drawEnergyStatusDisplay()
+{
+   const EnergyDisplayValues values = CalculateEnergyDisplayValues();
+   const double rowY[] = {2.16, 1.70, 1.24, 0.78};
+   const double rowValue[] =
+   {
+      values.wind, values.turbine, values.solar, values.battery
+   };
+   const float rowColor[][3] =
+   {
+      {0.22f, 0.78f, 0.94f},
+      {0.30f, 0.88f, 0.52f},
+      {0.98f, 0.72f, 0.18f},
+      {0.64f, 0.88f, 0.24f}
+   };
+
+   glPushAttrib(GL_CURRENT_BIT | GL_ENABLE_BIT | GL_LIGHTING_BIT |
+                GL_TEXTURE_BIT);
+   glDisable(GL_TEXTURE_2D);
+
+   // Matte posts and frame keep the sign consistent with utility equipment.
+   SetMaterial(0.06f, 0.07f, 0.07f, 6.0f);
+   glColor3f(0.30f, 0.33f, 0.33f);
+   drawBox(-0.78, 0.34, 0, 0.13, 0.68, 0.13);
+   drawBox( 0.78, 0.34, 0, 0.13, 0.68, 0.13);
+   drawBox(0, 1.51, 0, 2.35, 2.36, 0.17);
+
+   // Slightly inset dark panel leaves a visible matte border.
+   SetMaterial(0.02f, 0.02f, 0.02f, 4.0f);
+   glColor3f(0.035f, 0.055f, 0.060f);
+   drawBox(0, 1.51, -0.091, 2.12, 2.12, 0.035);
+
+   for (int row = 0; row < 4; ++row)
+   {
+      drawEnergyStatusIcon(row, rowY[row],
+                           rowColor[row][0], rowColor[row][1],
+                           rowColor[row][2]);
+      drawEnergyStatusBar(rowY[row], rowValue[row],
+                          rowColor[row][0], rowColor[row][1],
+                          rowColor[row][2]);
+   }
+
+   ResetMaterial();
+   glPopAttrib();
+}
+
 // Draw a handmade rectangle on the building's front wall. Coordinates are
 // specified explicitly so facade details remain polygon-based rather than
 // relying on library solids.
@@ -1480,6 +1642,13 @@ void drawControlBuilding()
    glLineWidth(1.0f);
    if (lighting)
       glEnable(GL_LIGHTING);
+
+   // The display sits just right of the entrance, outside the building's
+   // footprint, so it remains visible without blocking the access path.
+   glPushMatrix();
+   glTranslated(3.50, 0, -1.02);
+   drawEnergyStatusDisplay();
+   glPopMatrix();
 
    ResetMaterial();
 }
