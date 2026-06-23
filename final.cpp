@@ -105,9 +105,11 @@ const double firstPersonBoundary = 43.0;
 const double firstPersonStep = 0.8;
 const double maxPitch = 85.0;
 const double mouseSensitivity = 0.3;
-const float fogColor[] = {0.12f, 0.16f, 0.20f, 1.0f};
-const float fogStart = 52.0f;
-const float fogEnd = 115.0f;
+// Match the clear color so enabled fog fades distant geometry into the sky
+// without creating a visible horizon band. The long range keeps it subtle.
+const float fogColor[] = {0.07f, 0.09f, 0.12f, 1.0f};
+const float fogStart = 58.0f;
+const float fogEnd = 125.0f;
 
 // Zone centers keep the large farm layout explicit and easy to extend.
 const double windZoneX = -22.0;
@@ -1652,12 +1654,22 @@ void drawGreenhouse(bool glassPass = false)
    if (!glassVisible)
       return;
 
+   // Save every fixed-pipeline state touched by the glass pass. This makes the
+   // pass safe even if its caller later changes the surrounding render order.
+   glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT |
+                GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT);
+
+   // Standard source-alpha blending keeps the panes visible without making
+   // them opaque. Depth testing remains enabled, but transparent fragments do
+   // not write depth and therefore cannot hide scenery drawn behind the glass.
    glEnable(GL_BLEND);
    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
    glDepthMask(GL_FALSE);
    drawGreenhouseGlassPanels();
-   glDepthMask(GL_TRUE);
-   glDisable(GL_BLEND);
+
+   // Restore blend mode, depth-write mask, texture/material, and enable state
+   // exactly as they were before entering the transparent glass pass.
+   glPopAttrib();
 }
 
 // Draw one complete origin-centered solar-panel assembly. All components use
@@ -2611,10 +2623,21 @@ void drawWindRibbons()
       1.55, 2.20, 2.78, 1.82, 2.55, 3.10, 2.00, 2.72
    };
 
+   GLint previousProgram = 0;
+   glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram);
+
+   // Scope all fixed-pipeline changes made by the translucent ribbon pass.
+   // In particular, preserve the caller's lighting, texture, blend function,
+   // current color, and depth-write mask instead of assuming default values.
+   glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT |
+                GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT);
+
    glDisable(GL_LIGHTING);
    glDisable(GL_TEXTURE_2D);
    glEnable(GL_BLEND);
    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   // Keep depth testing active so buildings and turbines occlude airflow, but
+   // avoid writing ribbon depth that could interfere with greenhouse glass.
    glDepthMask(GL_FALSE);
 
    const bool shaderActive = useShader && windProgram;
@@ -2713,11 +2736,10 @@ void drawWindRibbons()
    }
    glPopMatrix();
 
-   // Never allow the ribbon shader to leak into glass, HUD, or later frames.
-   glUseProgram(0);
-
-   glDepthMask(GL_TRUE);
-   glDisable(GL_BLEND);
+   // Restore the exact incoming shader and fixed-pipeline state so ribbons
+   // cannot leak blend, lighting, texture, or depth settings into glass/HUD.
+   glUseProgram(static_cast<GLuint>(previousProgram));
+   glPopAttrib();
 }
 
 // -----------------------------------------------------------------------------
@@ -2911,8 +2933,8 @@ void ConfigureLighting(const float position[4])
 }
 
 // Configure subtle linear distance haze for all fixed-pipeline 3D geometry.
-// The color complements the clear color, while the distant end preserves the
-// full farm and leaves close inspection modes essentially unaffected.
+// The color matches the clear color, while the distant end preserves the full
+// farm and leaves close inspection modes essentially unaffected.
 void ConfigureFog()
 {
    if (!fogEnabled)
@@ -3047,8 +3069,8 @@ void display()
    glPopMatrix();
    glMatrixMode(GL_MODELVIEW);
 
-   ErrCheck("display");
    glutSwapBuffers();
+   ErrCheck("display");
 }
 
 // Maintain the viewport and projection when the window dimensions change.
